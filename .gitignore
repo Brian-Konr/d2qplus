@@ -7,3 +7,11 @@ data/runs/rerank
 cache
 archive
 wandb/*
+
+.env
+
+runs/
+scored/
+gen/
+index/
+data/

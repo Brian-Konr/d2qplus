@@ -14,6 +14,16 @@ pip install -r requirements.txt
 pip install git+https://github.com/terrierteam/pyterrier_dr.git
 ```
 
+Because I want to use vLLM (which requires at least python 3.9), I created a new conda environment with python 3.9. If you want to use vLLM, please run the following commands:
+```
+conda create --name d2qplus python=3.9
+
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+conda install conda-forge::faiss-gpu
+conda install conda-forge::trec_eval
+pip install -r requirements.txt
+``` 
+
 ## 1. Scoring Queries
 To generate the ELECTRA scores of any dataset, you need to prepare a .jsonl file that contains three columns ['id', 'text', 'predicted_queries']. Then, you can run this command:
 

@@ -4,7 +4,7 @@ transformers==4.31.0
 sentence-transformers==2.2.2
 sentencepiece==0.1.99
 chardet==5.2.0
-faiss==1.6.5
+faiss
 matplotlib==3.7.3
 python-terrier==0.9.2
 pyterrier_pisa==0.0.6

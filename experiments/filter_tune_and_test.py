@@ -15,7 +15,7 @@ if not pt.started():
 
 
 def process(scored_file, index_dir, eval_dir, runs_dir, N = 80, 
-            filter_type = "top", percentages = [10, 30, 50, 70, 90], 
+            filter_type = "top", percentages = [0, 10, 30, 50, 70, 90], 
             measure = RR@10, dev = "irds:msmarco-passage/dev/small"):
     '''
     scored_file: the file which contains the corpus, expansion queries with their corresponding relevance scores
