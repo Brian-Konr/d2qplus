@@ -1,4 +1,5 @@
 
+import json
 import os, sys
 sys.path.insert(0, os.getcwd())
 import pandas as pd
@@ -46,6 +47,49 @@ def get_threshold(df_scored, percentage, filter_type='top'):
 
     return percentiles[f'p_{keep_percentage}']
 
+
+def index_evaluate_text_only(index_dir, eval_dir, runs_dir, dataset, pt_dataset_name, corpus_jsonl_path=None, query_column=None,qrels=None, queries=None):
+    df_ans = pd.DataFrame()
+    all_eval_file = f'{eval_dir}/text_only_eval.xlsx'
+    exp_runs_dir = f'{runs_dir}/{dataset}'
+    log_file = f'{eval_dir}/index_evaluate.log'
+
+    text_only_exp = 'text_only' # text only experiment
+    text_index = f"{index_dir}/{dataset}_{text_only_exp}"
+
+    logger = util.get_logger(log_file)
+
+    if not util.is_index_built(text_index):
+        if corpus_jsonl_path is not None:
+            with open(corpus_jsonl_path, 'r') as f:
+                corpus = [json.loads(line) for line in f]
+                docs = []
+                for doc in corpus:
+                    docno = doc['_id']
+                    text = doc['title'] + " " + doc['text']
+                    docs.append({'docno': docno, 'text': text})
+        else:
+        # construct a dataframe return same as util.get_original_text() => docno, text
+            dataset = pt.get_dataset(dataset) # e.g., irds:beir/trec-covid
+            corpus_iter = dataset.get_corpus_iter()
+            docs = []
+            for doc in corpus_iter:
+                docno = doc['docno']
+                text = doc['text']
+                docs.append({'docno': docno, 'text': text})
+        df_text = pd.DataFrame(docs)
+        build_index(df_text, text_index, logger)
+
+    # 1. Evaluate text only
+    df_res = evaluate(text_index, logger, exp_runs_dir, run_initial_name=text_only_exp, 
+                    eval_save_file=f'{eval_dir}/{text_only_exp}.csv', 
+                    dataset=pt_dataset_name, query_column=query_column, qrels=qrels, queries=queries)
+    
+    df_res['experiment'] = [text_only_exp] * len(df_res)
+    df_ans = pd.concat([df_ans, df_res], ignore_index=True)
+
+    # save the whole evaluation file 
+    df_ans.to_excel(all_eval_file, index=False)
 
 def index_evaluate(index_dir, eval_dir, runs_dir, dataset, pt_dataset_name, scored_file, 
                    query_column=None, qrels=None, queries=None, N = 20, filter_type='top',
@@ -136,6 +180,10 @@ def main():
     parser.add_argument("--query_column",  default=None, type=str, required=False, help="The column of the query to be used for retrieval in case there are multiple columns in the topics")
     parser.add_argument("--N",  default=20, type=int, required=False, help="Number of expansion queries per document in the scored file")
     parser.add_argument("--percentages", metavar='N', type=int, nargs='+', default=[30, 50], required=False, help="a list of percentages to experiment with")
+    parser.add_argument("--corpus_jsonl_path", type=str, default=None, required=False, help="Path to the corpus JSONL file. This is used to build the index if it does not exist")
+    # test for evaluation pipeline construction, only do text only
+    parser.add_argument("--test", action='store_true', help="Test the evaluation pipeline construction only")
+
     args = parser.parse_args()
     scored_file = args.scored_file
     index_dir = args.index_dir
@@ -161,8 +209,23 @@ def main():
         qrels = pd.read_csv(qrels, names=['qid', 'Q0', 'docno', 'label'], sep='\s+', dtype={"qid": "str", "docno": "str"})
     
     if queries is not None:
-        queries = pd.read_csv(queries, names=['qid', 'query'], sep='\t', dtype={"qid": "str", "query": "str"})
-        queries['query'] = queries['query'].apply(preprocessing.preprocess)
+        # if in jsonl
+        if queries.endswith('.jsonl'):
+            with open(queries, 'r') as f:
+                queries = [json.loads(line) for line in f]
+                queries = pd.DataFrame(queries)
+                queries['qid'] = queries['_id']
+                queries['query'] = queries['text']
+                queries = queries[['qid', 'query']]
+        else:
+            queries = pd.read_csv(queries, names=['qid', 'query'], sep='\t', dtype={"qid": "str", "query": "str"})
+            # queries['query'] = queries['query'].apply(preprocessing.preprocess)
+
+    if args.test:
+        # test the evaluation pipeline construction
+        index_evaluate_text_only(index_dir, eval_dir, runs_dir, dataset, pt_name, query_column=query_column, qrels=qrels, queries=queries, corpus_jsonl_path=args.corpus_jsonl_path)
+        return
+    
 
     index_evaluate(index_dir, eval_dir, runs_dir, dataset, pt_dataset_name=pt_name, 
                    scored_file=scored_file, query_column=query_column, qrels=qrels, N = N,

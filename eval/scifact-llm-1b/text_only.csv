@@ -1,2 +1,0 @@
-name,RR@10,nDCG@10,R@10,R@100,R@1000,P@10,P@100,run
-text_only-on-irds-beir-scifact,0.628,0.663,0.792,0.911,0.963,0.087,0.01,runs/irds:beir/scifact/text_only-on-irds-beir-scifact.run

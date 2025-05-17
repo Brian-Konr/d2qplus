@@ -15,3 +15,5 @@ scored/
 gen/
 index/
 data/
+
+built-index/

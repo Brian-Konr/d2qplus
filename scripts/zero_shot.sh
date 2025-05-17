@@ -7,4 +7,4 @@ python experiments/zero_shot.py \
     --percentages 30 50 \
     --dataset 'irds:beir/scifact' \
     --qrels "/home/guest/r12922050/GitHub/d2qplus/data/scifact-qrels/test.trec" \
-    --pt_name 'irds:beir/scifact' 
+    --pt_name 'irds:beir/scifact' \

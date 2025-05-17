@@ -268,3 +268,4 @@ def get_repeated_terms(doc_unique_terms, queries, return_joined=False):
         return " \n ".join(res_terms)
     else:
         return res_terms
+

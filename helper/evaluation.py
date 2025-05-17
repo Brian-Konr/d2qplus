@@ -6,6 +6,8 @@ import numpy as np
 import traceback
 import gc
 from pyterrier_pisa import PisaIndex
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
 import re
 import subprocess 
 import configure as cf
@@ -53,7 +55,7 @@ def evaluate_run(df_run, test_set='irds:msmarco-passage/trec-dl-2019/judged', na
         measures,
         round=3,
         names=[name]
-        )
+        ) 
     new_row = {'name': "BM25", 
                 'test': test_set, 
                 "RR@10": df_res["RR@10"].values[0],
@@ -107,9 +109,8 @@ def get_evaluation_row(run, test_set, name="BM25", b=None, k=None):
     return result
 
 
-
 def evaluate_model(test_set, measure, model, run_save_dir=None, run_name=None, 
-                   query_column=None, qrels=None, queries=None):                
+                   query_column=None, qrels=None, queries=None):    
     measures = [RR@10, nDCG@10, R@10, R@100, R@1000, P@10, P@100]
     if measure not in measures:
         measures.append(measure)
@@ -120,7 +121,6 @@ def evaluate_model(test_set, measure, model, run_save_dir=None, run_name=None,
     if queries is None:
         dataset = pt.get_dataset(test_set)
         queries = dataset.get_topics(query_column)
-         
 
     if run_save_dir is not None and not os.path.exists(run_save_dir):
         os.makedirs(run_save_dir)
