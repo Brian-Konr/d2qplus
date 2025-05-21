@@ -1,0 +1,53 @@
+You will extract a short topic label from given documents and keywords.
+Here are four examples of topics you created before:
+
+# Example 1
+Sample texts from this topic:
+- To assess level of gene expression, an Illumina whole-genome HT-12 v4 beadchip was used.
+- Illumina whole-genome HT-12 v4 beadchip microarray data revealed eight genes upregulated following 24-hour exposure to 1- and 2-μM SFN, which included NQO1 and TXNRD1.
+- Grant P30 {"type":"entrez-nucleotide","attrs":{"text":"DK046200","term_id":"187635970","term_text":"DK046200"}}DK046200 and Ruth L. Kirschstein National Research Service Award T32 DK007703-16 from the National Institutes of Health.
+
+Keywords: dk046200 pcr reverse microarray v4 beadchip illumina transcripts microarrays genome
+topic: Gene expression analysis using Illumina microarray
+
+# Example 2
+Sample texts from this topic:
+- Intakes of processed and unprocessed red meat, fish, total poultry, and skinless poultry were not associated with prostate cancer recurrence or progression.
+- Objective: We examined the association between postdiagnostic consumption of processed and unprocessed red meat, fish, poultry, and eggs and the risk of prostate cancer recurrence or progression.
+- Conclusions: Our results suggest that the postdiagnostic consumption of processed or unprocessed red meat, fish, or skinless poultry is not associated with prostate cancer recurrence or progression, whereas consumption of eggs and poultry with skin may increase the risk.
+
+Keywords: prostate unprocessed poultry skinless postdiagnostic processed eggs red progression meat
+topic: Postdiagnostic meat and egg consumption and prostate cancer progression
+
+# Example 3
+Sample texts from this topic:
+- Vegetables have the highest fiber content per Kcal, and in most populations with fiber intakes over 50 g, vegetables contribute over 50% of total fiber intake.
+- BACKGROUND: Fiber intake is associated with lower cardiovascular disease risk.
+- The summary RR for the highest versus the lowest intake was 0.93 [95% confidence interval (CI) 0.89-0.98, I(2) = 0%] for dietary fiber, 0.95 (95% CI 0.86-1.06, I(2) = 4%) for fruit fiber, 0.99 (95% CI 0.92-1.07, I(2) = 1%) for vegetable fiber, 0.96 (95% CI 0.90-1.02, I(2) = 5%) for cereal fiber, 0.91 (95% CI 0.84-0.99, I(2) = 7%) for soluble fiber and 0.95 (95% CI 0.89-1.02, I(2) = 0%) for insoluble fiber.
+
+Keywords: fiber fibers fibre soluble quintile kcal insoluble nonviscous viscosity dietary
+topic: Dietary fiber intake and cardiovascular disease risk
+
+
+# Example 4
+Sample texts from this topic:
+- A weaker correlation was observed for catechin to % NFCS (R(2) = 0.680).
+- Results show a strong correlation (R(2) = 0.834) of epicatechin to the level of % NFCS and also very good correlations for N = 2-5 oligomers to % NFCS.
+- A lesser but still good correlation exists between the calculated percent cacao (calcd % cacao) content, a proxy for percent cacao, and these same flavanol measures, with catechin again showing a lesser degree of correlation to calcd % cacao.
+
+Keywords: catechin cacao nfcs calcd epicatechin oligomers correlation lesser 834 680
+topic: Correlation of catechin and epicatechin to cacao content
+
+# Your task
+Sample texts from this topic:
+[DOCUMENTS]
+
+Keywords: [KEYWORDS]
+
+**Crucial Output Instruction:**
+You MUST generate a single line as your response.
+This line MUST start EXACTLY with `topic: ` (including the space after the colon).
+Following `topic: `, provide ONLY the concise topic label.
+Do NOT add any other text, explanations, numbering, markdown, or any content before or after this single line.
+
+topic: 

@@ -1,9 +1,11 @@
 import re, os
 from typing import List
+
+# Third-party imports
 import pandas as pd
 from vllm import LLM, SamplingParams
-from vllm.sampling_params import GuidedDecodingParams
 from util import read_txt
+# Local imports
 from constants import TOPIC_REPRESENTATION_SYSTEM_PROMPT
 
 
@@ -53,16 +55,14 @@ def enhance_topic_representation_with_vllm(
     return generated_topics
 
 def main():
-    topic_model_df_pickle_path = "/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/topics/topic_model_info.pickle"
-    few_shot_prompt_txt_path = "/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/topics/few_shot_prompts.txt"
-    output_enhanced_topic_model_df_pickle_path = "/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/topics/enhanced_topic_model_info.pickle" 
-    generated_topics_output_path = "/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/topics/generated_topics.txt"
-
+    topic_model_df_pickle_path = "/home/guest/r12922050/GitHub/d2qplus/topics/nfcorpus/topic_model.pickle"
+    few_shot_prompt_txt_path = "/home/guest/r12922050/GitHub/d2qplus/prompts/enhance_NL_topic.txt"
+    output_enhanced_topic_model_df_pickle_path = "/home/guest/r12922050/GitHub/d2qplus/topics/nfcorpus/topic_model_enhanced.pickle"
     messages = construct_prompt_messages(topic_model_df_pickle_path, few_shot_prompt_txt_path)
 
     # vllm part
     os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
-    llm = LLM(tensor_parallel_size=2, max_model_len=4096, gpu_memory_utilization=0.9)
+    llm = LLM(model="meta-llama/Llama-3.1-8B-Instruct", tensor_parallel_size=2, max_model_len=8192, gpu_memory_utilization=0.9)
     sampling_params = SamplingParams(
         temperature=0.1,
         max_tokens=128,
@@ -70,10 +70,6 @@ def main():
     )
 
     generated_topics = enhance_topic_representation_with_vllm(messages=messages, llm=llm, sampling_params=sampling_params)
-    with open(generated_topics_output_path, "w") as f:
-        for topic in generated_topics:
-            f.write(f"{topic}\n-------------------------\n")
-    print(f"Generated topics saved to {generated_topics_output_path}")
 
     df = pd.read_pickle(topic_model_df_pickle_path)
     df['Enhanced_Topic'] = generated_topics

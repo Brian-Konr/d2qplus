@@ -25,11 +25,14 @@ def load_corpus(jsonl_path: str) -> pd.DataFrame:
         for line in f:
             e = json.loads(line)
             docs.append({
-                'docno': e['id'],
+                # 'docno': e['id'],
+                'orig_id': e['id'], # keep original id for remapping later
                 'text': e['text'],
                 'pred_queries': e.get('predicted_queries', [])
             })
-    return pd.DataFrame(docs)
+    df = pd.DataFrame(docs)
+    df['docno'] = df.index.astype(str)
+    return df
 
 
 def build_indexes(df: pd.DataFrame, base_dir: str, batch_size: int, max_length: int):
@@ -43,18 +46,12 @@ def build_indexes(df: pd.DataFrame, base_dir: str, batch_size: int, max_length: 
     idx_aug_dir  = os.path.join(base_dir, "aug_bm25")
 
     # Text-only BM25
-    if os.path.isdir(idx_text_dir):
-        idx_text = pt.IndexFactory.of(idx_text_dir)
-    else:
-        itext = pt.IterDictIndexer(idx_text_dir, blocks=False, overwrite=True, meta={'docno': 40}) # meta docno=40 means the _id field is 40 chars
-        idx_text = itext.index(df[['docno','text']].to_dict('records'))
+    itext = pt.IterDictIndexer(idx_text_dir, blocks=False, overwrite=True)
+    idx_text = itext.index(df[['docno','text']].to_dict('records'))
     
     # Text+Doc2Query BM25
-    if os.path.isdir(idx_aug_dir):
-        idx_aug = pt.IndexFactory.of(idx_aug_dir)
-    else:
-        iaug  = pt.IterDictIndexer(idx_aug_dir, blocks=False, overwrite=True, meta={'docno': 40})
-        idx_aug  = iaug.index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
+    iaug  = pt.IterDictIndexer(idx_aug_dir, blocks=False, overwrite=True)
+    idx_aug  = iaug.index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
     
     # 3. Dense (BGE-M3) indices via FlexIndex :contentReference[oaicite:5]{index=5}
     factory = BGEM3(batch_size=batch_size, max_length=max_length, verbose=True, device="cuda")
@@ -122,6 +119,8 @@ def main():
 
     # Load data
     corpus = load_corpus(args.corpus)
+
+    id_map = dict(zip(corpus['orig_id'], corpus['docno']))
     
     with open(args.queries, 'r') as f:
         queries = [json.loads(line) for line in f]
@@ -131,6 +130,7 @@ def main():
         queries = queries[['qid', 'query']]
 
     qrels  = pt.io.read_qrels(args.qrels)
+    qrels['docno'] = qrels['docno'].map(id_map)
 
     # Build indices
     idx_text, idx_aug, idx_td, idx_ad, factory = build_indexes(
