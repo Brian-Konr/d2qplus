@@ -34,11 +34,14 @@ def prepare_training_data(integrated_data_path,
 
 
 if __name__ == "__main__":
+    import json
     INTEGRATED_DATA_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data.jsonl"
+    DATA_WITH_PROMPT_OUT_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt.jsonl"
     data = prepare_training_data(integrated_data_path=INTEGRATED_DATA_PATH)
-    for d in data[:5]:
-        print(d['prompt'])
-        print("="*80 + "\n")
+
+    with open(DATA_WITH_PROMPT_OUT_PATH, 'w') as f:
+        for d in data:
+            f.write(json.dumps(d) + '\n')
 
 
 

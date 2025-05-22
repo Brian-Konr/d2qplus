@@ -3,22 +3,12 @@
 import wandb
 import torch
 from tqdm import tqdm
-from types import MethodType
 from transformers import AutoTokenizer, GenerationConfig, AutoModelForCausalLM
-from transformers.modeling_outputs import CausalLMOutputWithPast
 from datasets import load_dataset
-from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
+from trl.trainer import GRPOConfig, GRPOTrainer
 from sentence_transformers import SentenceTransformer
 from reward import CoverageRewardModel
 from utils.constants import D2Q_SYS_PROMPT_NEW
-
-def tuple_to_dataclass(self, *args, **kwargs):
-    kwargs["return_dict"] = True
-    out = self.__old_fwd(*args, **kwargs)
-    if isinstance(out, tuple):
-        logits, *rest = out
-        out = CausalLMOutputWithPast(logits=logits, past_key_values=None)
-    return out
 
 def main():
     # start a new wandb run to track this training
@@ -26,15 +16,27 @@ def main():
     wandb.init(project="doc2query++", name="topic-coverage-only", notes="topic coverage only with PPO")
 
     model_name = "meta-llama/Llama-3.2-1B-Instruct"
+    model = AutoModelForCausalLM.from_pretrained(model_name).cuda()
+
+    output_dir = f"outputs/{model_name.split('/')[-1]}-GRPO"
+
+    training_args = GRPOConfig(
+        output_dir=output_dir,
+        learning_rate=1e-5,
+        beta=0.04, # divergence coefficient – how much the policy is allowed to deviate from the reference model. higher value – more conservative updates. Default is 0.04
+        per_device_train_batch_size=4,
+        num_generations=4, # group size
+        gradient_accumulation_steps=4,
+        max_prompt_length=1024,
+        max_completion_length=256,
+        num_train_epochs=1,
+        save_steps=100,
+        use_vllm=True
+    )
+
     # — Tokenizer & Models —
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = tokenizer.eos_token
-
-    model     = AutoModelForCausalLMWithValueHead.from_pretrained(model_name).cuda()
-    ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name).cuda()
-
-    for m in (model, ref_model):
-        m.base_model_prefix = "pretrained_model"
 
     gen_config = GenerationConfig(
         max_new_tokens=256,
@@ -44,11 +46,6 @@ def main():
         # return_dict_in_generate=True,
     )
     model.generation_config = gen_config
-    ref_model.generation_config = gen_config
-
-    backbone = getattr(ref_model, ref_model.base_model_prefix)  # "pretrained_model"
-    backbone.__old_fwd = backbone.forward
-    backbone.forward   = MethodType(tuple_to_dataclass, backbone)
 
     # - Reward Model -
     topic_vecs = torch.load("/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/vector-lookup/topic_vectors.pt")      # shape [K, d]
