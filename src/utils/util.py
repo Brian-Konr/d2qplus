@@ -4,6 +4,7 @@ import json
 import os
 
 
+
 def is_index_built(index_path):
     pisa_index = PisaIndex(index_path, stops='none')
     is_built  = pisa_index.built()

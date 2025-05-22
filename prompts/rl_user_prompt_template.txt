@@ -1,0 +1,11 @@
+"""Here is an example document with keywords and weighted topics. Generate 10 queries without any additional text:
+
+Document:
+[DOCUMENT]
+
+Keywords:
+[KEYWORDS]
+
+Topics (with weights):
+[TOPICS]
+"""
