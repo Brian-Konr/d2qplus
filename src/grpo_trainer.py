@@ -71,7 +71,8 @@ def main():
         'format': 0.1,
         'coverage': 1.0,
         'diversity': 0.2,
-        'keyword': 0.4
+        'keyword': 0.4,
+        'relevance': 0.4
     }
 
     reward_fn = CombinedReward(
