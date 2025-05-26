@@ -32,16 +32,47 @@ def prepare_training_data(integrated_data_path,
         d['prompt'] = prompt
     return data
 
+def save_document_vectors(model_name, data_path, out_path):
+    """
+    Embed documents and save their vectors to a .pt file.
+
+    model_name: name of the embedding model to use (e.g., "all-MiniLM-L6-v2"). Will be loaded using SentenceTransformer.
+    data_path: path to the input jsonl data file (need to make sure it has 'text' and '_id' field)
+    out_path: path to the output .pt file where vectors will be saved. It will be a dictionary with document IDs (string) as keys and normalized vectors as values.
+    """
+    import torch
+    from sentence_transformers import SentenceTransformer
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    embed_model = SentenceTransformer(model_name, device=device)  # use CPU for embedding
+
+    data = read_jsonl(data_path)
+    texts = [d['text'] for d in data]
+    ids = [d['_id'] for d in data]
+    embs = embed_model.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
+    vectors = {str(id_) : emb.cpu() for id_, emb in zip(ids, embs)}
+    torch.save(vectors, out_path)
+    print(f"Document vectors saved to {out_path} with {len(vectors)} entries.")
+
 
 if __name__ == "__main__":
-    import json
-    INTEGRATED_DATA_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data.jsonl"
-    DATA_WITH_PROMPT_OUT_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt.jsonl"
-    data = prepare_training_data(integrated_data_path=INTEGRATED_DATA_PATH)
+    pass
+    # - Save document vectors -
+    
+    # embed_model_name = "allenai/scibert_scivocab_uncased"
+    # data_path = "/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus.jsonl"
+    # out_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/corpus-lookup/document_vectors.pt"
+    # save_document_vectors(embed_model_name, data_path, out_path)
 
-    with open(DATA_WITH_PROMPT_OUT_PATH, 'w') as f:
-        for d in data:
-            f.write(json.dumps(d) + '\n')
+
+
+    # import json
+    # INTEGRATED_DATA_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data.jsonl"
+    # DATA_WITH_PROMPT_OUT_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt.jsonl"
+    # data = prepare_training_data(integrated_data_path=INTEGRATED_DATA_PATH)
+
+    # with open(DATA_WITH_PROMPT_OUT_PATH, 'w') as f:
+    #     for d in data:
+    #         f.write(json.dumps(d) + '\n')
 
 
 

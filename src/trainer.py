@@ -12,14 +12,6 @@ from sentence_transformers import SentenceTransformer
 from reward import CoverageRewardModel
 from utils.constants import D2Q_SYS_PROMPT_NEW
 
-def tuple_to_dataclass(self, *args, **kwargs):
-    kwargs["return_dict"] = True
-    out = self.__old_fwd(*args, **kwargs)
-    if isinstance(out, tuple):
-        logits, *rest = out
-        out = CausalLMOutputWithPast(logits=logits, past_key_values=None)
-    return out
-
 def main():
     # start a new wandb run to track this training
     wandb.login()
@@ -31,10 +23,9 @@ def main():
     tokenizer.pad_token = tokenizer.eos_token
 
     model     = AutoModelForCausalLMWithValueHead.from_pretrained(model_name).cuda()
-    ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(model_name).cuda()
+    ref_model = AutoModelForCausalLM.from_pretrained(model_name).cuda()
 
-    for m in (model, ref_model):
-        m.base_model_prefix = "pretrained_model"
+    model.base_model_prefix = "pretrained_model"
 
     gen_config = GenerationConfig(
         max_new_tokens=256,
@@ -46,14 +37,10 @@ def main():
     model.generation_config = gen_config
     ref_model.generation_config = gen_config
 
-    backbone = getattr(ref_model, ref_model.base_model_prefix)  # "pretrained_model"
-    backbone.__old_fwd = backbone.forward
-    backbone.forward   = MethodType(tuple_to_dataclass, backbone)
-
     # - Reward Model -
     topic_vecs = torch.load("/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/vector-lookup/topic_vectors.pt")      # shape [K, d]
     tau = 0.35
-    embed_model = SentenceTransformer("allenai/scibert_scivocab_uncased", device="cuda")
+    embed_model = SentenceTransformer("allenai/scibert_scivocab_uncased", device="cpu")
     reward_model = CoverageRewardModel(topic_vecs, embed_model, tau).cuda()
 
     # — Dataset (each example must have a “prompt” field) —
@@ -99,7 +86,19 @@ def main():
         train_dataset=dataset,
         data_collator=collator,
     )
-    ppo_trainer.train()
+    for epoch, batch in tqdm(enumerate(ppo_trainer.dataloader)):
+        query_tensors = batch["input_ids"]
+
+        with torch.no_grad():
+            response_tensors = ppo_trainer.generate(query_tensors, **gen_config.to_dict())
+            batch["response"] = [tokenizer.decode(r.squeeze()) for r in response_tensors]
+
+        rewards = reward_model(batch, batch["response"])
+        
+        ## PPO step
+        stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
+        ppo_trainer.log_stats(stats, batch, rewards)
+    ppo_trainer.save_model(f"ppo_model_epoch_{epoch}.pt")
 
 if __name__ == "__main__":
     main()
