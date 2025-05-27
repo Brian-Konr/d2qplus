@@ -1,13 +1,24 @@
 from util import read_jsonl, read_txt
+from constants import USER_PROMPT_TOPIC_TEMPLATE, USER_PROMPT_TEMPLATE
 
-def prepare_training_data(integrated_data_path, 
-                          rl_user_prompt_template_path="/home/guest/r12922050/GitHub/d2qplus/prompts/rl_user_prompt_template.txt", 
-                          drop_no_topics=True, 
-                          max_keywords=10, 
-                          max_topics=5):
-    # see 
+def prepare_training_data(
+        integrated_data_path, 
+        drop_no_topics=True, 
+        max_keywords=10, 
+        max_topics=5
+    ):
+    """
+    Take integrated data and perform following steps:
+
+    1. Read the integrated data from a JSONL file.
+    2. sort keywords based on their score and limit to `max_keywords`.
+    3. sort topics based on their weight and limit to `max_topics`.
+    4. Prepare a prompt for each document using the user prompt template. (with / without topics)
+    5. Return the modified data with prompts.
+
+    The modified data is used for generating final training data's prompt column with topic / keyword guidance, but it can also be used for directly prompting LLM to generate queries (baseline)
+    """
     data = read_jsonl(integrated_data_path)
-
     if drop_no_topics:
         data = [d for d in data if d['topics']]
     # prepare prompt
@@ -25,9 +36,7 @@ def prepare_training_data(integrated_data_path,
         topics_str = ', '.join([f"{t['Enhanced_Topic']} ({t['weight']})" for t in topics])
 
         # create prompt
-        prompt_template = read_txt(rl_user_prompt_template_path)
-        
-        prompt = prompt_template.replace("[DOCUMENT]", doc_content).replace("[KEYWORDS]", keywords_str).replace("[TOPICS]", topics_str)
+        prompt = USER_PROMPT_TOPIC_TEMPLATE.replace("[DOCUMENT]", doc_content).replace("[KEYWORDS]", keywords_str).replace("[TOPICS]", topics_str)
         
         d['prompt'] = prompt
     return data

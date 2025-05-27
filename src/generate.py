@@ -2,7 +2,7 @@ import json
 from typing import List
 from utils.util import read_jsonl
 from pydantic import BaseModel, Field
-from utils.constants import D2Q_SYSTEM_PROMPT
+from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC, D2Q_SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 from vllm import LLM, SamplingParams
 from vllm.sampling_params import GuidedDecodingParams
 import pandas as pd
@@ -14,7 +14,6 @@ def parse_args():
     parser.add_argument("--enhanced_rep_path", type=str, help="Path to the enhanced_rep.jsonl file")
     parser.add_argument("--corpus_path", type=str, required=True, help="Path to the corpus.jsonl file")
     parser.add_argument("--output_path", type=str, required=True, help="Path to save the generated queries")
-    parser.add_argument("--cuda_visible_devices", type=str, default="2", help="Comma-separated string of CUDA visible device IDs (e.g., '0,1,2')")
 
     # test
     parser.add_argument("--test", action="store_true", default=False, help="Run in test mode")
@@ -47,23 +46,23 @@ def combine_topic_info(enhanced_rep_path: str, corpus_path: str) -> List[dict]:
         doc['text'] = corpus_dict[doc['doc_id']]
     return enhnaced_rep
 
-def make_messages(enhanced_corpus: List[dict]) -> List[dict]:
+def make_messages(data: List[dict], with_topic_keywords = False) -> List[dict]:
     """
-    generate prompt messages for vllm with only the text field
+    make conversation messages for LLM to generate queries based on the provided documents.
+    
+    `with_topic_keywords`: if True, the system prompt and user prompt will include topic, keyword information. But the data needs to have 'prompt' field.
+
+    `data`: The data is expected to be a list of dictionaries, where each dictionary contains:
+
+    - text: the document text
+    - prompt (optional): the organized user prompt (can be obtained by running `prepare_training_data` in `utils/data.py`)
     """
     messages = []
-    for doc in enhanced_corpus:
+    for doc in data:
         text = doc['text']
-        messages.append([
-            {
-                "role": "system",
-                "content": D2Q_SYSTEM_PROMPT
-            },
-            {
-                "role": "user",
-                "content": f"Read the following document and generate 10 relevant queries that can be answered by this document.\n\n{text}"
-            }
-        ])
+        sys_prompt = {"role": "system", "content": D2Q_SYS_PROMPT_WITH_TOPIC if with_topic_keywords else D2Q_SYSTEM_PROMPT}
+        user_prompt = {"role": "user", "content": doc['prompt'] if with_topic_keywords else USER_PROMPT_TEMPLATE.replace("[DOCUMENT]", text)}
+        messages.append([sys_prompt, user_prompt])
     return messages
 
 def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: SamplingParams) -> List[str]:
@@ -77,9 +76,6 @@ def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: Sampl
 
 if __name__ == "__main__":
     args = parse_args()
-    
-    # Set CUDA visible devices
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_visible_devices
     enhanced_rep_path = args.enhanced_rep_path
     corpus_path = args.corpus_path
     output_path = args.output_path

@@ -9,7 +9,7 @@ from datasets import load_dataset, Dataset
 from trl.trainer import GRPOConfig, GRPOTrainer
 from sentence_transformers import SentenceTransformer
 from reward import CoverageRewardModel, topic_reward_func
-from utils.constants import D2Q_SYS_PROMPT_NEW
+from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC
 from unsloth import FastModel
 
 def main():
@@ -75,7 +75,7 @@ def main():
             for raw_prompt, raw_topics in zip(batch["prompt"], batch["topics"]):
                 # build the Chat‐style prompt
                 messages.append([
-                    {"role": "system", "content": D2Q_SYS_PROMPT_NEW},
+                    {"role": "system", "content": D2Q_SYS_PROMPT_WITH_TOPIC},
                     {"role": "user",   "content": raw_prompt},
                 ])
                 # pull out topic_id and weight from each topic dict
