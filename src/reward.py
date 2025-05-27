@@ -131,6 +131,7 @@ class KeywordCoverageReward(Reward):
 
 
 class CombinedReward:
+    __name__ = "CombinedReward"
     """
     Combines multiple Reward modules in one pass, embedding once.
     """

@@ -22,8 +22,8 @@ def preprocess_dataset(data_path, chunk_size=100) -> Dataset:
 
     def process_batch(batch):
         # batch is like {"prompt": [...], "topics":[...], ...}
-        messages, topic_ids, topic_weights = [], [], []
-        for raw_prompt, raw_topics in zip(batch["prompt"], batch["topics"]):
+        messages, topic_ids, topic_weights, keywords = [], [], [], []
+        for raw_prompt, raw_topics, raw_keywords in zip(batch["prompt"], batch["topics"], batch["keywords"]):
             # build the Chat‐style prompt
             messages.append([
                 {"role": "system", "content": D2Q_SYS_PROMPT_NEW},
@@ -32,14 +32,16 @@ def preprocess_dataset(data_path, chunk_size=100) -> Dataset:
             # pull out topic_id and weight from each topic dict
             topic_ids.append([t["topic_id"]  for t in raw_topics])
             topic_weights.append([t["weight"]    for t in raw_topics])
+            keywords.append([kw["key"] for kw in raw_keywords]) # keywords is a list of dicts with {"key": "keyword", "wegiht": 0.52..}
 
         return {
             "prompt":        messages,
             "topic_ids":     topic_ids,
             "topic_weights": topic_weights,
+            "keywords_list": keywords
         }
 
-    return dataset.map(process_batch, batched=True, batch_size=chunk_size, remove_columns=["prompt", "topics"])
+    return dataset.map(process_batch, batched=True, batch_size=chunk_size, remove_columns=["prompt", "topics", "keywords"])
 
 def main():
     # start a new wandb run to track this training
@@ -51,7 +53,7 @@ def main():
 
     # - Dataset -
     data_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt_1.jsonl"
-    dataset = preprocess_dataset(data_path, chunk_size=100)
+    dataset = preprocess_dataset(data_path, chunk_size=1000)
     print(f"Dataset processed with {len(dataset)} examples.")
 
     # - Topic coverage -
@@ -65,7 +67,6 @@ def main():
 
     # - Relevance Reward -
     doc_vectors_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/corpus-lookup/document_vectors.pt" # Document ID: MED-10, Vector shape: torch.Size([768])
-    doc_vectors = torch.load(doc_vectors_path)
     
     weights = {
         'format': 0.1,
@@ -78,6 +79,7 @@ def main():
     reward_fn = CombinedReward(
         embed_model=embed_model, 
         topic_vecs_path=topic_vecs_path, 
+        doc_vecs_path= doc_vectors_path,
         bm25=bm25_corpus, 
         expected_n=5,
         tau=topic_similarity_threshold,
@@ -88,7 +90,7 @@ def main():
 
     training_args = GRPOConfig(
         output_dir=output_dir,
-        learning_rate=1e-5,
+        learning_rate=5e-6,
         beta=0.04, # divergence coefficient – how much the policy is allowed to deviate from the reference model. higher value – more conservative updates. Default is 0.04
         per_device_train_batch_size=2,
         optim="adamw_8bit",
@@ -102,7 +104,7 @@ def main():
         num_train_epochs=1,
         save_steps=100,
         use_vllm=True,
-        temperature=0.7,
+        temperature=0.8,
         max_completion_length=256, # maximum length of the generated completion
     )
 
