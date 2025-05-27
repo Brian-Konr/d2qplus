@@ -8,9 +8,10 @@ from transformers import AutoTokenizer, GenerationConfig, AutoModelForCausalLM
 from datasets import load_dataset, Dataset
 from trl.trainer import GRPOConfig, GRPOTrainer
 from sentence_transformers import SentenceTransformer
-from reward import CoverageRewardModel, topic_reward_func
+from reward import CombinedReward
 from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC
 from unsloth import FastModel
+from rank_bm25 import BM25Okapi
 
 def main():
     # start a new wandb run to track this training
@@ -91,13 +92,43 @@ def main():
         return dataset.map(process_batch, batched=True, batch_size=chunk_size, remove_columns=["prompt", "topics"])
     
     dataset = preprocess_dataset("/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt_1.jsonl")
+    
+    # - Topic coverage -
+    embed_model = SentenceTransformer("allenai/scibert_scivocab_uncased", device="cuda")
+    topic_vecs_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/vector-lookup/topic_vectors.pt"
+    topic_similarity_threshold = 0.6
+
+    # - Keyword Coverage -
+    tokenized_texts = [doc.lower().split() for doc in dataset["text"]]
+    bm25_corpus = BM25Okapi(tokenized_texts, k1=1.5, b=0.75)
+
+    # - Relevance Reward -
+    doc_vectors_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/corpus-lookup/document_vectors.pt" # Document ID: MED-10, Vector shape: torch.Size([768])
+    
+    weights = {
+        'format': 0.1,
+        'coverage': 1.0,
+        'diversity': 0.2,
+        'keyword': 0.4,
+        'relevance': 0.4
+    }
+
+    reward_fn = CombinedReward(
+        embed_model=embed_model, 
+        topic_vecs_path=topic_vecs_path, 
+        doc_vecs_path= doc_vectors_path,
+        bm25=bm25_corpus, 
+        expected_n=5,
+        tau=topic_similarity_threshold,
+        weights=weights
+    )
 
     trainer = GRPOTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
         processing_class=tokenizer,
-        reward_funcs=[topic_reward_func]
+        reward_funcs=[reward_fn]
     )
 
     trainer.train()

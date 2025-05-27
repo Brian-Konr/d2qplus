@@ -12,9 +12,10 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate queries using VLLM")
     parser.add_argument("--enhanced_rep_path", type=str, help="Path to the enhanced_rep.jsonl file")
-    parser.add_argument("--corpus_path", type=str, required=True, help="Path to the corpus.jsonl file")
-    parser.add_argument("--output_path", type=str, required=True, help="Path to save the generated queries")
-
+    # parser.add_argument("--corpus_path", type=str, help="Path to the corpus.jsonl file")
+    parser.add_argument("--output_path", type=str, help="Path to save the generated queries")
+    parser.add_argument("--integrated_data_with_prompt_path", type=str, required=True, help="Path to the integrated data with prompt file")
+    parser.add_argument("--with_topic_keywords", action="store_true", default=False, help="Use topic and keyword information in the prompts")
     # test
     parser.add_argument("--test", action="store_true", default=False, help="Run in test mode")
     parser.add_argument("--use_enhanced_rep", action="store_true", default=False, help="Use enhanced representation")
@@ -27,16 +28,6 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.7, help="Temperature for sampling")
     parser.add_argument("--max_tokens", type=int, default=512, help="Maximum tokens for generation")
     return parser.parse_args()
-
-"""
-Example of the enhanced_rep.jsonl file:
-
-{"doc_id": "MED-10", "topics": [{"topic_id": 299, "words": ["statin", "statins", "users", "breast", "use", "diagnosis", "prescribing", "disaggregate", "researched", "situated"], "weight": 0.3333333333333333, "Enhanced_Topic": "Statin use and breast cancer survival"}, {"topic_id": 21, "words": ["breast", "invasive", "diagnosed", "cancer", "nh", "incidence", "lan", "mammography", "2003", "died"], "weight": 0.3333333333333333, "Enhanced_Topic": "Breast cancer incidence rates among non-Hispanic white women"}, {"topic_id": 1318, "words": ["statins", "ezetimibe", "postal", "idc", "829", "ilc", "151", "statin", "sharp", "monotherapy"], "weight": 0.3333333333333333, "Enhanced_Topic": "Statin and ezetimibe use and cancer risk"}]}
-
-
-Example of the corpus.jsonl file:
-{"_id": "MED-10", "title": "Statin Use and Breast Cancer Survival: A Nationwide Cohort Study from Finland", "text": "Recent studies have suggested that statins, an established drug group...", "metadata": {"url": "http://www.ncbi.nlm.nih.gov/pubmed/25329299"}}
-"""
 
 def combine_topic_info(enhanced_rep_path: str, corpus_path: str) -> List[dict]:
     enhnaced_rep = read_jsonl(enhanced_rep_path)
@@ -76,19 +67,11 @@ def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: Sampl
 
 if __name__ == "__main__":
     args = parse_args()
-    enhanced_rep_path = args.enhanced_rep_path
-    corpus_path = args.corpus_path
     output_path = args.output_path
-
-
-    # Load the enhanced representation and corpus
-    if args.use_enhanced_rep:
-        corpus = combine_topic_info(enhanced_rep_path, corpus_path)
-    else:
-        corpus = read_jsonl(corpus_path)
+    corpus = read_jsonl(args.integrated_data_with_prompt_path)
     
     # Create messages for vllm
-    messages = make_messages(corpus)
+    messages = make_messages(corpus, with_topic_keywords=args.with_topic_keywords)
 
     if args.test:
         # Test mode: only process the first 10 documents
@@ -118,7 +101,8 @@ if __name__ == "__main__":
     output_data = []
     for doc, queries in zip(corpus, generated_q):
         output_data.append({
-            "id": doc["_id"],
+            "id": doc["doc_id"],
+            "title": doc.get("title", ""),
             "text": doc["text"],
             "predicted_queries": queries
         })

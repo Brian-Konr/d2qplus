@@ -3,7 +3,7 @@ from constants import USER_PROMPT_TOPIC_TEMPLATE, USER_PROMPT_TEMPLATE
 
 def prepare_training_data(
         integrated_data_path, 
-        drop_no_topics=True, 
+        drop_no_topics=False, 
         max_keywords=10, 
         max_topics=5
     ):
@@ -30,6 +30,11 @@ def prepare_training_data(
         # sort keywords based on score
         keywords = sorted(keywords, key=lambda x: x[1], reverse=True)[:max_keywords]
         keywords_str = ', '.join([f"{k[0]}" for k in keywords])
+        # convert keywords to dict format because load_dataset cannot mix the values with different types
+        d['keywords'] = [
+            {"key": k, "weight": w}
+            for k, w in d["keywords"]
+        ]
 
         # format topics
         topics = sorted(topics, key=lambda x: x['weight'], reverse=True)[:max_topics]
@@ -64,7 +69,6 @@ def save_document_vectors(model_name, data_path, out_path):
 
 
 if __name__ == "__main__":
-    pass
     # - Save document vectors -
     
     # embed_model_name = "allenai/scibert_scivocab_uncased"
@@ -74,14 +78,14 @@ if __name__ == "__main__":
 
 
 
-    # import json
-    # INTEGRATED_DATA_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data.jsonl"
-    # DATA_WITH_PROMPT_OUT_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt.jsonl"
-    # data = prepare_training_data(integrated_data_path=INTEGRATED_DATA_PATH)
+    import json
+    INTEGRATED_DATA_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data.jsonl"
+    DATA_WITH_PROMPT_OUT_PATH = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt_3.jsonl"
+    data = prepare_training_data(integrated_data_path=INTEGRATED_DATA_PATH)
 
-    # with open(DATA_WITH_PROMPT_OUT_PATH, 'w') as f:
-    #     for d in data:
-    #         f.write(json.dumps(d) + '\n')
+    with open(DATA_WITH_PROMPT_OUT_PATH, 'w') as f:
+        for d in data:
+            f.write(json.dumps(d) + '\n')
 
 
 

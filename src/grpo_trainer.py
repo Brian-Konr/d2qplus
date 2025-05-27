@@ -8,15 +8,14 @@ from transformers import AutoTokenizer, GenerationConfig, AutoModelForCausalLM
 from datasets import load_dataset, Dataset
 from trl.trainer import GRPOConfig, GRPOTrainer
 from sentence_transformers import SentenceTransformer
-from reward import CombinedReward
-from utils.constants import D2Q_SYS_PROMPT_NEW
+from reward_v2 import create_reward_functions
+from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC
 from rank_bm25 import BM25Okapi
 
 
-def preprocess_dataset(data_path, chunk_size=100) -> Dataset:
+def preprocess_dataset(data_path, chunk_size=1000) -> Dataset:
     # — Dataset (each example must have a “prompt” field) —
     dataset = load_dataset("json", data_files=data_path)
-    dataset = dataset["train"].shuffle(seed=42).select(range(1000))
     total_samples = len(dataset)
     print(f"Loaded {total_samples} samples")
 
@@ -26,7 +25,7 @@ def preprocess_dataset(data_path, chunk_size=100) -> Dataset:
         for raw_prompt, raw_topics, raw_keywords in zip(batch["prompt"], batch["topics"], batch["keywords"]):
             # build the Chat‐style prompt
             messages.append([
-                {"role": "system", "content": D2Q_SYS_PROMPT_NEW},
+                {"role": "system", "content": D2Q_SYS_PROMPT_WITH_TOPIC},
                 {"role": "user",   "content": raw_prompt},
             ])
             # pull out topic_id and weight from each topic dict
@@ -46,7 +45,7 @@ def preprocess_dataset(data_path, chunk_size=100) -> Dataset:
 def main():
     # start a new wandb run to track this training
     wandb.login()
-    wandb.init(project="doc2query++", name="topic-coverage-only", notes="topic coverage only with PPO")
+    wandb.init(project="doc2query++", name="topic-coverage-only-grpo-separate-reward", notes="topic coverage only with PPO")
 
     model_name = "meta-llama/Llama-3.2-1B-Instruct"
     model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16).cuda()
@@ -54,12 +53,13 @@ def main():
     # - Dataset -
     data_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/integrated/data_with_prompt_1.jsonl"
     dataset = preprocess_dataset(data_path, chunk_size=1000)
+    dataset = dataset["train"]
     print(f"Dataset processed with {len(dataset)} examples.")
 
     # - Topic coverage -
-    embed_model = SentenceTransformer("allenai/scibert_scivocab_uncased", device="cpu")
+    embed_model = SentenceTransformer("allenai/scibert_scivocab_uncased", device="cuda")
     topic_vecs_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/vector-lookup/topic_vectors.pt"
-    topic_similarity_threshold = 0.6
+    topic_similarity_threshold = 0.65
 
     # - Keyword Coverage -
     tokenized_texts = [doc.lower().split() for doc in dataset["text"]]
@@ -69,30 +69,30 @@ def main():
     doc_vectors_path = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/corpus-lookup/document_vectors.pt" # Document ID: MED-10, Vector shape: torch.Size([768])
     
     weights = {
-        'format': 0.1,
-        'coverage': 1.0,
+        'format': 0.2,
+        'coverage': 0.2,
         'diversity': 0.2,
-        'keyword': 0.4,
-        'relevance': 0.4
+        'keyword': 0.2,
+        'relevance': 0.2
     }
 
-    reward_fn = CombinedReward(
+    reward_functions = create_reward_functions(
         embed_model=embed_model, 
         topic_vecs_path=topic_vecs_path, 
-        doc_vecs_path= doc_vectors_path,
+        doc_vecs_path=doc_vectors_path,
         bm25=bm25_corpus, 
-        expected_n=5,
+        expected_n=10,
         tau=topic_similarity_threshold,
         weights=weights
     )
 
-    output_dir = f"outputs/{model_name.split('/')[-1]}-GRPO"
+    output_dir = f"outputs/{model_name.split('/')[-1]}-GRPO-separate-reward"
 
     training_args = GRPOConfig(
         output_dir=output_dir,
         learning_rate=5e-6,
         beta=0.04, # divergence coefficient – how much the policy is allowed to deviate from the reference model. higher value – more conservative updates. Default is 0.04
-        per_device_train_batch_size=2,
+        per_device_train_batch_size=4,
         optim="adamw_8bit",
         adam_beta1=0.9,
         adam_beta2=0.99,
@@ -118,7 +118,7 @@ def main():
         args=training_args,
         train_dataset=dataset,
         processing_class=tokenizer,
-        reward_funcs=[reward_fn],
+        reward_funcs=reward_functions,  # Pass list of separate reward functions
     )
 
     trainer.train()

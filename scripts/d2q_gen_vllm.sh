@@ -1,24 +1,58 @@
-# only use document text
-python3 /home/guest/r12922050/GitHub/d2qplus/src/generate.py \
-    --corpus_path /home/guest/r12922050/GitHub/d2qplus/data/scidocs/corpus.jsonl \
-    --output_path "/home/guest/r12922050/GitHub/d2qplus/gen/scidocs_gen_10q_text_only.jsonl" \
-    --model meta-llama/Llama-3.2-1B-Instruct \
-    --cuda_visible_devices 1,2 \
-    --tensor_parallel_size 2 \
-    --max_model_len 8192 \
-    --temperature 0.7 \
-    --max_tokens 512
+#!/bin/bash
+# filepath: /home/guest/r12922050/GitHub/d2qplus/scripts/d2q_gen_vllm.sh
+export CUDA_VISIBLE_DEVICES=0,1
+# Configuration variables
+BASE_PATH="/home/guest/r12922050/GitHub/d2qplus"
+DATASET="nfcorpus"
+DATA_FILE="data_with_prompt_3.jsonl"
+MODEL="meta-llama/Llama-3.2-1B-Instruct"
+TRAINED_MODEL="/home/guest/r12922050/GitHub/d2qplus/outputs/Llama-3.2-1B-Instruct-GRPO/checkpoint-500"
+TENSOR_PARALLEL_SIZE=2
+MAX_MODEL_LEN=8192
+TEMPERATURE=0.7
+MAX_TOKENS=512
+TEST_FLAG="--test"
+TOPIC_KEYWORDS_FLAG="--with_topic_keywords"
 
-# if has enhanced_rep (topic info)
+# Derived paths
+INPUT_PATH="${BASE_PATH}/augmented-data/${DATASET}/integrated/${DATA_FILE}"
+OUTPUT_DIR="${BASE_PATH}/gen/${DATASET}"
 
-# python3 /home/guest/r12922050/GitHub/d2qplus/src/generate.py \
-#     --use_enhanced_rep \
-#     --enhanced_rep_path /home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/topics/enhanced_rep.jsonl \
-#     --corpus_path /home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus.jsonl \
-#     --output_path /home/guest/r12922050/GitHub/d2qplus/gen/nfcorpus_gen_10q_text_only.jsonl \
-#     --model meta-llama/Llama-3.2-1B-Instruct \
-#     --cuda_visible_devices 2 \
-#     --tensor_parallel_size 1 \
-#     --max_model_len 8192 \
-#     --temperature 0.7 \
-#     --max_tokens 512
+
+python3 ${BASE_PATH}/src/generate.py \
+    ${TOPIC_KEYWORDS_FLAG} \
+    --integrated_data_with_prompt_path ${INPUT_PATH} \
+    --output_path "${OUTPUT_DIR}/wit_topic_grpo_1b.jsonl" \
+    --model ${TRAINED_MODEL} \
+    --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+    --max_model_len ${MAX_MODEL_LEN} \
+    --temperature ${TEMPERATURE} \
+    --max_tokens ${MAX_TOKENS}
+
+echo "GRPO With Topic Keywords Generation Completed"
+
+
+# # Job 1: base LLM With topic keywords
+python3 ${BASE_PATH}/src/generate.py \
+    ${TOPIC_KEYWORDS_FLAG} \
+    --integrated_data_with_prompt_path ${INPUT_PATH} \
+    --output_path "${OUTPUT_DIR}/with_topic_llama_1b.jsonl" \
+    --model ${MODEL} \
+    --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+    --max_model_len ${MAX_MODEL_LEN} \
+    --temperature ${TEMPERATURE} \
+    --max_tokens ${MAX_TOKENS}
+
+echo "With Topic Keywords Generation Completed"
+
+# # Job 2: base LLM Without topic keywords
+python3 ${BASE_PATH}/src/generate.py \
+    --integrated_data_with_prompt_path ${INPUT_PATH} \
+    --output_path "${OUTPUT_DIR}/without_topic_llama_1b.jsonl" \
+    --model ${MODEL} \
+    --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+    --max_model_len ${MAX_MODEL_LEN} \
+    --temperature ${TEMPERATURE} \
+    --max_tokens ${MAX_TOKENS}
+
+echo "Without Topic Keywords Generation Completed"
