@@ -54,6 +54,8 @@ def enhance_topic_representation_with_vllm(
         generated_topics.append(topic_label)
     return generated_topics
 
+
+
 def main():
     topic_model_df_pickle_path = "/home/guest/r12922050/GitHub/d2qplus/topics/nfcorpus/topic_model.pickle"
     few_shot_prompt_txt_path = "/home/guest/r12922050/GitHub/d2qplus/prompts/enhance_NL_topic.txt"

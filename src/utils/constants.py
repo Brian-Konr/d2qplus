@@ -58,3 +58,14 @@ Keywords:
 Topics (with weights):
 [TOPICS]
 """
+
+# - Promptagator - 
+PROMPTAGATOR_SYS_PROMPT = """You are a query generation assistant. Your task is to generate a query based on the provided article. Your output MUST adhere the following format strictly:
+
+Rules:
+- NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
+- Exactly 1 query
+
+The following are some examples:\n"""
+
+PROMPTAGATOR_USER_PROMPT = "Here is an article. Generate a query for this article without any additional text:\n\nArticle: [DOCUMENT]"

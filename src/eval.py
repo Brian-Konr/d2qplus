@@ -4,6 +4,7 @@ import json
 import argparse
 import logging
 import re
+from typing import Optional
 import pandas as pd
 import pyterrier as pt
 from pyterrier_dr import BGEM3, FlexIndex
@@ -34,15 +35,19 @@ def load_corpus(jsonl_path: str) -> pd.DataFrame:
     return df
 
 
-def build_indexes(df: pd.DataFrame, base_dir: str, batch_size: int, max_length: int, overwrite_dense_index: bool):
+def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: int, max_length: int, overwrite_text_dense_index: bool, overwrite_aug_dense_index: bool):
     """Create 4 on-disk indices: sparse/dense × text/augmented."""
     os.makedirs(base_dir, exist_ok=True)
+    if index_name:
+        aug_base_dir = os.path.join(base_dir, index_name)
+        os.makedirs(aug_base_dir, exist_ok=True)
+
     # 1. Prepare augmented text
     df['aug_text'] = df['text'] + " " + df['pred_queries'].apply(lambda qs: " ".join(qs) if isinstance(qs, list) else qs)
     
     # 2. Sparse (BM25) indices via IterDictIndexer :contentReference[oaicite:4]{index=4}
     idx_text_dir = os.path.join(base_dir, "text_bm25")
-    idx_aug_dir  = os.path.join(base_dir, "aug_bm25")
+    idx_aug_dir  = os.path.join(aug_base_dir, "aug_bm25")
 
     # Text-only BM25
     itext = pt.IterDictIndexer(idx_text_dir, blocks=False, overwrite=True)
@@ -56,22 +61,23 @@ def build_indexes(df: pd.DataFrame, base_dir: str, batch_size: int, max_length: 
     factory = BGEM3(batch_size=batch_size, max_length=max_length, verbose=True, device="cuda")
     doc_enc = factory.doc_encoder()
     idx_td_dir = os.path.join(base_dir, "text_dense")
-    idx_ad_dir = os.path.join(base_dir, "aug_dense")
+    idx_ad_dir = os.path.join(aug_base_dir, "aug_dense")
 
     # Text-only Dense
-
     idx_text_dense = FlexIndex(idx_td_dir, verbose=True)
-    if overwrite_dense_index or not os.path.isdir(idx_td_dir):
-        # get the indexer, in overwrite mode
+    if overwrite_text_dense_index:
+        print(f"Building text dense index at {idx_td_dir}")
         text_dense_indexer = idx_text_dense.indexer(mode="overwrite")
-        # run the encoding → index pipeline
         (doc_enc >> text_dense_indexer).index(df[['docno','text']].to_dict('records'))    
-        
+        print("Text dense index built successfully.")
+    
     # Text+Doc2Query Dense
     idx_aug_dense = FlexIndex(idx_ad_dir, verbose=True)
-    if overwrite_dense_index or not os.path.isdir(idx_ad_dir):
+    if overwrite_aug_dense_index:
+        print(f"Building augmented dense index at {idx_ad_dir}")
         aug_dense_indexer = idx_aug_dense.indexer(mode="overwrite")
         (doc_enc >> aug_dense_indexer).index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
+        print("Augmented dense index built successfully.")
 
     return idx_text, idx_aug, idx_text_dense, idx_aug_dense, factory
 
@@ -82,9 +88,6 @@ def run_experiment(idxs, factory, queries, qrels, k: int, batch_size: int, metri
     bm25_aug  = pt.BatchRetrieve(idxs[1], wmodel="BM25")
     # Dense BGE-M3 (HNSW) :contentReference[oaicite:7]{index=7}
     qenc = factory.query_encoder()
-
-    # dense_text = qenc >> idxs[2].faiss_flat_retriever(gpu=True) >> transformer.limit(k)
-    # dense_aug = qenc >> idxs[3].faiss_flat_retriever(gpu=True) >> transformer.limit(k)
 
     dense_text = qenc >> idxs[2].torch_retriever(num_results=k, device="cuda", qbatch=batch_size)    
     dense_aug = qenc >> idxs[3].torch_retriever(num_results=k, device="cuda", qbatch=batch_size) 
@@ -106,14 +109,19 @@ def main():
         description="Evaluate sparse vs. dense × text vs. text+Doc2Query"
     )
     parser.add_argument("--corpus",    required=True, help="JSONL input for generated corpus file with fields: id, text, predicted_queries")
-    parser.add_argument("--overwrite-dense-index", action='store_true', default=False, help="Overwrite existing dense indices")
     parser.add_argument("--queries",    required=True, help="JSONL queries file")
     parser.add_argument("--qrels",     required=True, help="TREC qrels file")
-    parser.add_argument("--index-dir", default="indices", help="where to store indices")
+
+    parser.add_argument("--index-base-dir", default="indices", help="where to store indices")
+    parser.add_argument("--overwrite-text-dense-index", action='store_true', default=False, help="Overwrite existing dense indices")
+    parser.add_argument("--overwrite-aug-dense-index", action='store_true', default=False, help="Overwrite existing dense indices")
+    parser.add_argument("--index-name", default="", help="Name of the directory to store indices, if not specified, will use index_dir")
+
     parser.add_argument("--output",    default="results.csv", help="where to write metrics")
+
     parser.add_argument("--k",         type=int, default=300, help="top-k for retrieval")
     parser.add_argument("--batch-size",type=int, default=64, help="BGE-M3 encoder batch size")
-    parser.add_argument("--max-length",type=int, default=1024, help="BGE-M3 max sequence length")
+    parser.add_argument("--max-length",type=int, default=2048, help="BGE-M3 max sequence length")
     args = parser.parse_args()
 
 
@@ -134,7 +142,13 @@ def main():
 
     # Build indices
     idx_text, idx_aug, idx_td, idx_ad, factory = build_indexes(
-        corpus, args.index_dir, args.batch_size, args.max_length, args.overwrite_dense_index
+        df=corpus,
+        base_dir=args.index_base_dir, 
+        index_name=args.index_name, 
+        batch_size=args.batch_size, 
+        max_length=args.max_length,
+        overwrite_text_dense_index=args.overwrite_text_dense_index,
+        overwrite_aug_dense_index=args.overwrite_aug_dense_index, 
     )
 
     # Define metrics
@@ -156,7 +170,10 @@ def main():
         factory, queries, qrels, args.k, args.batch_size, metrics
     )
 
-    # Persist
+    # if args.output dir does not exist, create it
+    output_dir = os.path.dirname(args.output)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     print(results)
     results.to_csv(args.output, index=False)
     print(f"Results written to {args.output}")

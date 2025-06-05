@@ -92,7 +92,7 @@ def main():
         output_dir=output_dir,
         learning_rate=5e-6,
         beta=0.04, # divergence coefficient – how much the policy is allowed to deviate from the reference model. higher value – more conservative updates. Default is 0.04
-        per_device_train_batch_size=4,
+        per_device_train_batch_size=2,
         optim="adamw_8bit",
         adam_beta1=0.9,
         adam_beta2=0.99,
@@ -102,7 +102,7 @@ def main():
         gradient_accumulation_steps=2,
         max_prompt_length=1024,
         num_train_epochs=1,
-        save_steps=100,
+        save_steps=200,
         use_vllm=True,
         temperature=0.8,
         max_completion_length=256, # maximum length of the generated completion

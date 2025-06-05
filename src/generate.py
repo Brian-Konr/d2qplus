@@ -1,8 +1,8 @@
 import json
-from typing import List
+from typing import Any, List
 from utils.util import read_jsonl
 from pydantic import BaseModel, Field
-from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC, D2Q_SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
+from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC, D2Q_SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, PROMPTAGATOR_SYS_PROMPT, PROMPTAGATOR_USER_PROMPT
 from vllm import LLM, SamplingParams
 from vllm.sampling_params import GuidedDecodingParams
 import pandas as pd
@@ -14,8 +14,6 @@ def parse_args():
     parser.add_argument("--enhanced_rep_path", type=str, help="Path to the enhanced_rep.jsonl file")
     # parser.add_argument("--corpus_path", type=str, help="Path to the corpus.jsonl file")
     parser.add_argument("--output_path", type=str, help="Path to save the generated queries")
-    parser.add_argument("--integrated_data_with_prompt_path", type=str, required=True, help="Path to the integrated data with prompt file")
-    parser.add_argument("--with_topic_keywords", action="store_true", default=False, help="Use topic and keyword information in the prompts")
     # test
     parser.add_argument("--test", action="store_true", default=False, help="Run in test mode")
     parser.add_argument("--use_enhanced_rep", action="store_true", default=False, help="Use enhanced representation")
@@ -25,8 +23,18 @@ def parse_args():
     parser.add_argument("--tensor_parallel_size", type=int, default=1, help="Tensor parallel size")
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.9, help="GPU memory utilization")
     parser.add_argument("--max_model_len", type=int, default=8192, help="Maximum model length")
+
+    # vllm sampling parameters
     parser.add_argument("--temperature", type=float, default=0.7, help="Temperature for sampling")
     parser.add_argument("--max_tokens", type=int, default=512, help="Maximum tokens for generation")
+    parser.add_argument("--return_sequence_num", type=int, default=1, help="Number of return sequences")
+
+    # prompt parameters
+    parser.add_argument("--integrated_data_with_prompt_path", type=str, required=True, help="Path to the integrated data with prompt file")
+    parser.add_argument("--with_topic_keywords", action="store_true", default=False, help="Use topic and keyword information in the prompts")
+    parser.add_argument("--prompt_template", type=str, choices=["d2q", "promptagator", "inpars"], default="d2q", help="Prompt template to use for query generation") # d2q + with_topic_keywords = prompt template for D2Q with topic keywords information
+    parser.add_argument("--few_shot_examples_path", type=str, default=None, help="Path to the few-shot examples file (if using promptagator / InPars template)")
+
     return parser.parse_args()
 
 def combine_topic_info(enhanced_rep_path: str, corpus_path: str) -> List[dict]:
@@ -37,7 +45,7 @@ def combine_topic_info(enhanced_rep_path: str, corpus_path: str) -> List[dict]:
         doc['text'] = corpus_dict[doc['doc_id']]
     return enhnaced_rep
 
-def make_messages(data: List[dict], with_topic_keywords = False) -> List[dict]:
+def make_messages(data: List[dict], with_topic_keywords: bool, prompt_template: str = "d2q", few_shot_examples: List[Any] = []) -> List[dict]:
     """
     make conversation messages for LLM to generate queries based on the provided documents.
     
@@ -51,27 +59,44 @@ def make_messages(data: List[dict], with_topic_keywords = False) -> List[dict]:
     messages = []
     for doc in data:
         text = doc['text']
-        sys_prompt = {"role": "system", "content": D2Q_SYS_PROMPT_WITH_TOPIC if with_topic_keywords else D2Q_SYSTEM_PROMPT}
-        user_prompt = {"role": "user", "content": doc['prompt'] if with_topic_keywords else USER_PROMPT_TEMPLATE.replace("[DOCUMENT]", text)}
+        sys_prompt = {}
+        user_prompt = {}
+        if prompt_template == "d2q":
+            sys_prompt = {"role": "system", "content": D2Q_SYS_PROMPT_WITH_TOPIC if with_topic_keywords else D2Q_SYSTEM_PROMPT}
+            user_prompt = {"role": "user", "content": doc['prompt'] if with_topic_keywords else USER_PROMPT_TEMPLATE.replace("[DOCUMENT]", text)}
+        elif prompt_template == "promptagator":
+            prompt = PROMPTAGATOR_SYS_PROMPT
+            for example in few_shot_examples:
+                prompt += f"Article: {example['doc_text']}\n"
+                prompt += f"Query: {example['query_text']}\n\n"
+            sys_prompt = {"role": "system", "content": prompt}
+            user_prompt = {"role": "user", "content": PROMPTAGATOR_USER_PROMPT.replace("[DOCUMENT]", text)}
+            
         messages.append([sys_prompt, user_prompt])
     return messages
 
 def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: SamplingParams) -> List[str]:
-    gen_q = []
+    all_gen_q = []
     outputs = llm.chat(messages, sampling_params)
     for output in outputs:
-        generated_text = output.outputs[0].text
-        gen_q.append(generated_text)
-    return gen_q
+        gen_q = []
+        for seq in output.outputs:
+            gen_q.append(seq.text.strip())
+        all_gen_q.append(gen_q)
+    return all_gen_q
 
 
 if __name__ == "__main__":
     args = parse_args()
     output_path = args.output_path
     corpus = read_jsonl(args.integrated_data_with_prompt_path)
+
+    few_shot_examples = []
+    if args.few_shot_examples_path:
+        few_shot_examples = read_jsonl(args.few_shot_examples_path)
     
     # Create messages for vllm
-    messages = make_messages(corpus, with_topic_keywords=args.with_topic_keywords)
+    messages = make_messages(corpus, with_topic_keywords=args.with_topic_keywords, prompt_template=args.prompt_template, few_shot_examples=few_shot_examples)
 
     if args.test:
         # Test mode: only process the first 10 documents
@@ -92,6 +117,7 @@ if __name__ == "__main__":
     sampling_params = SamplingParams(
         temperature=args.temperature,
         max_tokens=args.max_tokens,
+        n=args.return_sequence_num,
     )
 
     # Generate queries
