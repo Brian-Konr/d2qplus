@@ -1,9 +1,13 @@
 import re, os
+import argparse
 from typing import List
 
 # Third-party imports
 import pandas as pd
+import sys
+
 from vllm import LLM, SamplingParams
+
 from util import read_txt
 # Local imports
 from constants import TOPIC_REPRESENTATION_SYSTEM_PROMPT
@@ -57,18 +61,41 @@ def enhance_topic_representation_with_vllm(
 
 
 def main():
-    topic_model_df_pickle_path = "/home/guest/r12922050/GitHub/d2qplus/topics/nfcorpus/topic_model.pickle"
-    few_shot_prompt_txt_path = "/home/guest/r12922050/GitHub/d2qplus/prompts/enhance_NL_topic.txt"
-    output_enhanced_topic_model_df_pickle_path = "/home/guest/r12922050/GitHub/d2qplus/topics/nfcorpus/topic_model_enhanced.pickle"
-    messages = construct_prompt_messages(topic_model_df_pickle_path, few_shot_prompt_txt_path)
+    parser = argparse.ArgumentParser(description="Enhance topic representation using VLLM")
+    
+    # File paths
+    parser.add_argument("--few_shot_prompt_txt_path",
+                       default="/home/guest/r12922050/GitHub/d2qplus/prompts/enhance_NL_topic.txt", 
+                       help="Path to few-shot prompt text file")
+    parser.add_argument("--topic_base_dir", type=str, required=True, help="Base directory for topic model files")
+    
+    # Model parameters
+    parser.add_argument("--model", default="meta-llama/Llama-3.1-8B-Instruct",
+                       help="Model name for VLLM")
+    parser.add_argument("--tensor_parallel_size", type=int, default=1,
+                       help="Tensor parallel size")
+    parser.add_argument("--max_model_len", type=int, default=4096,
+                       help="Maximum model length")
+    parser.add_argument("--gpu_memory_utilization", type=float, default=0.9,
+                       help="GPU memory utilization")
+    parser.add_argument("--temperature", type=float, default=0.1,
+                       help="Sampling temperature")
+    parser.add_argument("--max_tokens", type=int, default=128,
+                       help="Maximum tokens to generate")
+    
+    args = parser.parse_args()
+    
+    topic_model_df_pickle_path = f"{args.topic_base_dir}/topic_info_dataframe.pkl"
+    messages = construct_prompt_messages(topic_model_df_pickle_path, args.few_shot_prompt_txt_path)
 
     # vllm part
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
-    llm = LLM(model="meta-llama/Llama-3.1-8B-Instruct", tensor_parallel_size=2, max_model_len=8192, gpu_memory_utilization=0.9)
+    llm = LLM(model=args.model, 
+              tensor_parallel_size=args.tensor_parallel_size, 
+              max_model_len=args.max_model_len, 
+              gpu_memory_utilization=args.gpu_memory_utilization)
     sampling_params = SamplingParams(
-        temperature=0.1,
-        max_tokens=128,
-        # guided_decoding=GuidedDecodingParams(regex=r"topic:\s*<[^>]+>")
+        temperature=args.temperature,
+        max_tokens=args.max_tokens,
     )
 
     generated_topics = enhance_topic_representation_with_vllm(messages=messages, llm=llm, sampling_params=sampling_params)
@@ -77,7 +104,11 @@ def main():
     df['Enhanced_Topic'] = generated_topics
 
     enhanced_topic_df = df
-    enhanced_topic_df.to_pickle(output_enhanced_topic_model_df_pickle_path)
-    print(f"Enhanced topic model saved to {output_enhanced_topic_model_df_pickle_path}")
+    enhanced_topic_df.to_csv(f"{args.topic_base_dir}/topic_info_dataframe_enhanced.csv", index=False)
+    print(f"Enhanced topic model saved to {args.topic_base_dir}/topic_info_dataframe_enhanced.csv")
+    
+    enhanced_topic_df.to_pickle(f"{args.topic_base_dir}/topic_info_dataframe_enhanced.pkl")
+    print(f"Enhanced topic model saved to {args.topic_base_dir}/topic_info_dataframe_enhanced.pkl")
+    
 if __name__ == "__main__":
     main()

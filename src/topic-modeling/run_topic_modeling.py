@@ -11,7 +11,11 @@ import argparse, json, collections, random, os, sys
 import nltk; nltk.download("punkt", quiet=True)
 from nltk import sent_tokenize
 from bertopic import BERTopic
+from umap import UMAP
+from hdbscan import HDBSCAN
 from sentence_transformers import SentenceTransformer
+from bertopic.representation import KeyBERTInspired, PartOfSpeech, MaximalMarginalRelevance
+from sklearn.feature_extraction.text import CountVectorizer
 
 random.seed(42)
 
@@ -65,6 +69,7 @@ def run_topic_modeling(
     
     corpus_topics_out_path = os.path.join(base_output_dir, "doc_topics.jsonl")
     topic_info_dataframe_out = os.path.join(base_output_dir, "topic_info_dataframe.pkl")
+    topic_info_csv_out = os.path.join(base_output_dir, "topic_info_dataframe.csv")
     topic_model_out = os.path.join(base_output_dir, "bertopic_model")
 
     with open(corpus_path, "r", encoding="utf-8") as f:
@@ -89,17 +94,38 @@ def run_topic_modeling(
         print(f"Error loading embedder '{embed_model}' on '{embed_device}': {e}", file=sys.stderr)
         sys.exit(1)
 
+    pos_patterns = [
+        [{'POS': 'ADJ'},  {'POS': 'NOUN'}],   # adjective-noun, e.g. "gene expression"
+        [{'POS': 'NOUN'}],                    # single noun,  e.g. "oncogene"
+        [{'POS': 'PROPN'}]                    # proper noun  e.g. "CRISPR"
+    ]
+
+    pos = PartOfSpeech("en_core_sci_sm", pos_patterns=pos_patterns, top_n_words=250)
+    keybert = KeyBERTInspired(nr_candidate_words=100, nr_repr_docs=5, top_n_words=25)
+    mmr = MaximalMarginalRelevance(diversity=0.6, top_n_words=args.top_n_words)
+
+    representation_chain = [pos, keybert, mmr]
+
+    vectorizer = CountVectorizer(stop_words="english", ngram_range=args.n_gram_range, min_df=5)
+
     # Initialize BERTopic
     topic_model = BERTopic(
-        embedding_model=embedder, 
-        min_topic_size=args.min_topic_size,
-        top_n_words=args.top_n_words,
-        n_gram_range=args.n_gram_range,
+        embedding_model=embedder,
+        umap_model=UMAP(n_components=5, metric="cosine"),
+        min_topic_size=5,
+        vectorizer_model=vectorizer,
+        representation_model=representation_chain,
         verbose=True
     )
 
     # Fit and transform
-    topics, _ = topic_model.fit_transform(chunks)
+    topics, probs = topic_model.fit_transform(chunks)
+
+    if args.reduce_outliers:
+        # Reduce outliers if specified
+        print("Reducing outliers...")
+        topics = topic_model.reduce_outliers(chunks, topics, probabilities=probs, strategy="probabilities")
+        topic_model.update_topics(chunks, topics=topics)
 
     # Aggregate per document and write output
     os.makedirs(os.path.dirname(corpus_topics_out_path) or ".", exist_ok=True)
@@ -117,6 +143,8 @@ def run_topic_modeling(
     # Save topic model information
     topic_df = topic_model.get_topic_info()
     os.makedirs(os.path.dirname(topic_info_dataframe_out) or ".", exist_ok=True)
+    topic_df.to_csv(topic_info_csv_out, index=False)
+    print(f"Wrote topic model info to '{topic_info_csv_out}'")
     topic_df.to_pickle(topic_info_dataframe_out)
     print(f"Wrote topic model info to '{topic_info_dataframe_out}'")
 
@@ -145,6 +173,7 @@ def main():
     parser.add_argument("--min_topic_size", type=int, default=3, help="Minimum topic size for BERTopic.")
     parser.add_argument("--top_n_words", type=int, default=10, help="Number of top words per topic to extract.")
     parser.add_argument("--n_gram_range", type=lambda x: tuple(map(int, x.split(','))), default="1,3", help="Range of n-grams to consider for topic keywords (min,max)")
+    parser.add_argument("--reduce_outliers", action="store_true", help="Reduce outliers in topic model.")
 
 
     args = parser.parse_args()
