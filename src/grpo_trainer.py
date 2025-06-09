@@ -8,7 +8,7 @@ from transformers import AutoTokenizer, GenerationConfig, AutoModelForCausalLM
 from datasets import load_dataset, Dataset
 from trl.trainer import GRPOConfig, GRPOTrainer
 from sentence_transformers import SentenceTransformer
-from reward_v2 import create_reward_functions
+from reward import create_reward_functions
 from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC
 from rank_bm25 import BM25Okapi
 

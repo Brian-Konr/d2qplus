@@ -10,8 +10,13 @@ DATASET="nfcorpus"
 
 # List of query names to iterate through
 GEN_QUERY_NAMES=(
-    "Llama-3.2-1B-Instruct-promptagator"
+    "doc_add_topic_top_1_keywords"
+    "doc_add_topic_top_3_keywords"
+    "doc_add_topic_top_5_keywords"
+    "doc_add_topic_top_10_keywords"
 )
+
+# Remember if want to do dense indexing, need to pass --do-dense flag
 
 # Iterate through each query name
 for GEN_QUERY_NAME in "${GEN_QUERY_NAMES[@]}"; do
@@ -20,7 +25,6 @@ for GEN_QUERY_NAME in "${GEN_QUERY_NAMES[@]}"; do
     echo "=========================================="
     
     python3 $BASE_DIR/src/eval.py \
-        --overwrite-aug-dense-index \
         --corpus "$BASE_DIR/gen/$DATASET/$GEN_QUERY_NAME.jsonl" \
         --queries $BASE_DIR/data/$DATASET/queries.jsonl \
         --qrels $BASE_DIR/data/$DATASET/qrels/test.trec \

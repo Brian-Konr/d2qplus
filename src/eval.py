@@ -35,7 +35,7 @@ def load_corpus(jsonl_path: str) -> pd.DataFrame:
     return df
 
 
-def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: int, max_length: int, overwrite_text_dense_index: bool, overwrite_aug_dense_index: bool):
+def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: int, max_length: int, overwrite_text_dense_index: bool, overwrite_aug_dense_index: bool, do_dense: bool = True):
     """Create 4 on-disk indices: sparse/dense × text/augmented."""
     os.makedirs(base_dir, exist_ok=True)
     if index_name:
@@ -58,42 +58,51 @@ def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: 
     idx_aug  = iaug.index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
     
     # 3. Dense (BGE-M3) indices via FlexIndex :contentReference[oaicite:5]{index=5}
-    factory = BGEM3(batch_size=batch_size, max_length=max_length, verbose=True, device="cuda")
-    doc_enc = factory.doc_encoder()
-    idx_td_dir = os.path.join(base_dir, "text_dense")
-    idx_ad_dir = os.path.join(aug_base_dir, "aug_dense")
-
-    # Text-only Dense
-    idx_text_dense = FlexIndex(idx_td_dir, verbose=True)
-    if overwrite_text_dense_index:
-        print(f"Building text dense index at {idx_td_dir}")
-        text_dense_indexer = idx_text_dense.indexer(mode="overwrite")
-        (doc_enc >> text_dense_indexer).index(df[['docno','text']].to_dict('records'))    
-        print("Text dense index built successfully.")
+    factory = None
+    idx_text_dense = None
+    idx_aug_dense = None
     
-    # Text+Doc2Query Dense
-    idx_aug_dense = FlexIndex(idx_ad_dir, verbose=True)
-    if overwrite_aug_dense_index:
-        print(f"Building augmented dense index at {idx_ad_dir}")
-        aug_dense_indexer = idx_aug_dense.indexer(mode="overwrite")
-        (doc_enc >> aug_dense_indexer).index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
-        print("Augmented dense index built successfully.")
+    if do_dense:
+        factory = BGEM3(batch_size=batch_size, max_length=max_length, verbose=True, device="cuda")
+        doc_enc = factory.doc_encoder()
+        idx_td_dir = os.path.join(base_dir, "text_dense")
+        idx_ad_dir = os.path.join(aug_base_dir, "aug_dense")
+
+        # Text-only Dense
+        idx_text_dense = FlexIndex(idx_td_dir, verbose=True)
+        if overwrite_text_dense_index:
+            print(f"Building text dense index at {idx_td_dir}")
+            text_dense_indexer = idx_text_dense.indexer(mode="overwrite")
+            (doc_enc >> text_dense_indexer).index(df[['docno','text']].to_dict('records'))    
+            print("Text dense index built successfully.")
+        
+        # Text+Doc2Query Dense
+        idx_aug_dense = FlexIndex(idx_ad_dir, verbose=True)
+        if overwrite_aug_dense_index:
+            print(f"Building augmented dense index at {idx_ad_dir}")
+            aug_dense_indexer = idx_aug_dense.indexer(mode="overwrite")
+            (doc_enc >> aug_dense_indexer).index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
+            print("Augmented dense index built successfully.")
 
     return idx_text, idx_aug, idx_text_dense, idx_aug_dense, factory
 
-def run_experiment(idxs, factory, queries, qrels, k: int, batch_size: int, metrics):
+def run_experiment(idxs, factory, queries, qrels, k: int, batch_size: int, metrics, do_dense: bool = True):
     """Build retrievers, run and evaluate."""
     # Sparse BM25 :contentReference[oaicite:6]{index=6}
     bm25_text = pt.BatchRetrieve(idxs[0], wmodel="BM25")
     bm25_aug  = pt.BatchRetrieve(idxs[1], wmodel="BM25")
-    # Dense BGE-M3 (HNSW) :contentReference[oaicite:7]{index=7}
-    qenc = factory.query_encoder()
-
-    dense_text = qenc >> idxs[2].torch_retriever(num_results=k, device="cuda", qbatch=batch_size)    
-    dense_aug = qenc >> idxs[3].torch_retriever(num_results=k, device="cuda", qbatch=batch_size) 
-
-    systems = [bm25_text, bm25_aug, dense_text, dense_aug]
-    names   = ["BM25_text", "BM25_text+DQ", "Dense_text", "Dense_text+DQ"]
+    
+    systems = [bm25_text, bm25_aug]
+    names   = ["BM25_text", "BM25_text+DQ"]
+    
+    if do_dense and factory is not None:
+        # Dense BGE-M3 (HNSW) :contentReference[oaicite:7]{index=7}
+        qenc = factory.query_encoder()
+        dense_text = qenc >> idxs[2].torch_retriever(num_results=k, device="cuda", qbatch=batch_size)    
+        dense_aug = qenc >> idxs[3].torch_retriever(num_results=k, device="cuda", qbatch=batch_size) 
+        
+        systems.extend([dense_text, dense_aug])
+        names.extend(["Dense_text", "Dense_text+DQ"])
     
     exp = pt.Experiment(
         systems, queries, qrels,
@@ -116,6 +125,7 @@ def main():
     parser.add_argument("--overwrite-text-dense-index", action='store_true', default=False, help="Overwrite existing dense indices")
     parser.add_argument("--overwrite-aug-dense-index", action='store_true', default=False, help="Overwrite existing dense indices")
     parser.add_argument("--index-name", default="", help="Name of the directory to store indices, if not specified, will use index_dir")
+    parser.add_argument("--do-dense", action='store_true', default=False, help="Enable dense indexing and retrieval")
 
     parser.add_argument("--output",    default="results.csv", help="where to write metrics")
 
@@ -148,7 +158,8 @@ def main():
         batch_size=args.batch_size, 
         max_length=args.max_length,
         overwrite_text_dense_index=args.overwrite_text_dense_index,
-        overwrite_aug_dense_index=args.overwrite_aug_dense_index, 
+        overwrite_aug_dense_index=args.overwrite_aug_dense_index,
+        do_dense=args.do_dense, 
     )
 
     # Define metrics
@@ -167,7 +178,8 @@ def main():
     # Run and evaluate
     results = run_experiment(
         (idx_text, idx_aug, idx_td, idx_ad),
-        factory, queries, qrels, args.k, args.batch_size, metrics
+        factory, queries, qrels, args.k, args.batch_size, metrics,
+        do_dense=args.do_dense
     )
 
     # if args.output dir does not exist, create it

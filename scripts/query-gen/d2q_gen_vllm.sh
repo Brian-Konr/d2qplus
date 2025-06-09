@@ -22,40 +22,40 @@ OUTPUT_DIR="${BASE_PATH}/gen/${DATASET}"
 OUTPUT_NAME="Llama-3.2-1B-Instruct-GRPO-separate-reward"
 
 
+# python3 ${BASE_PATH}/src/generate.py \
+#     ${TOPIC_KEYWORDS_FLAG} \
+#     --integrated_data_with_prompt_path ${INPUT_PATH} \
+#     --output_path "${OUTPUT_DIR}/${OUTPUT_NAME}.jsonl" \
+#     --model ${TRAINED_MODEL} \
+#     --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+#     --max_model_len ${MAX_MODEL_LEN} \
+#     --temperature ${TEMPERATURE} \
+#     --max_tokens ${MAX_TOKENS}
+
+# echo "GRPO With Topic Keywords Generation Completed"
+
+
+# # Job 1: base LLM With topic keywords
 python3 ${BASE_PATH}/src/generate.py \
     ${TOPIC_KEYWORDS_FLAG} \
     --integrated_data_with_prompt_path ${INPUT_PATH} \
-    --output_path "${OUTPUT_DIR}/${OUTPUT_NAME}.jsonl" \
-    --model ${TRAINED_MODEL} \
+    --output_path "${OUTPUT_DIR}/with_topic_llama_1b.jsonl" \
+    --model ${MODEL} \
     --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
     --max_model_len ${MAX_MODEL_LEN} \
     --temperature ${TEMPERATURE} \
     --max_tokens ${MAX_TOKENS}
 
-echo "GRPO With Topic Keywords Generation Completed"
+echo "With Topic Keywords Generation Completed"
 
+# # Job 2: base LLM Without topic keywords
+python3 ${BASE_PATH}/src/generate.py \
+    --integrated_data_with_prompt_path ${INPUT_PATH} \
+    --output_path "${OUTPUT_DIR}/without_topic_llama_1b.jsonl" \
+    --model ${MODEL} \
+    --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+    --max_model_len ${MAX_MODEL_LEN} \
+    --temperature ${TEMPERATURE} \
+    --max_tokens ${MAX_TOKENS}
 
-# # # Job 1: base LLM With topic keywords
-# python3 ${BASE_PATH}/src/generate.py \
-#     ${TOPIC_KEYWORDS_FLAG} \
-#     --integrated_data_with_prompt_path ${INPUT_PATH} \
-#     --output_path "${OUTPUT_DIR}/with_topic_llama_1b.jsonl" \
-#     --model ${MODEL} \
-#     --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
-#     --max_model_len ${MAX_MODEL_LEN} \
-#     --temperature ${TEMPERATURE} \
-#     --max_tokens ${MAX_TOKENS}
-
-# echo "With Topic Keywords Generation Completed"
-
-# # # Job 2: base LLM Without topic keywords
-# python3 ${BASE_PATH}/src/generate.py \
-#     --integrated_data_with_prompt_path ${INPUT_PATH} \
-#     --output_path "${OUTPUT_DIR}/without_topic_llama_1b.jsonl" \
-#     --model ${MODEL} \
-#     --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
-#     --max_model_len ${MAX_MODEL_LEN} \
-#     --temperature ${TEMPERATURE} \
-#     --max_tokens ${MAX_TOKENS}
-
-# echo "Without Topic Keywords Generation Completed"
+echo "Without Topic Keywords Generation Completed"
