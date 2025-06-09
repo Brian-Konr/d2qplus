@@ -6,14 +6,11 @@ export JVM_PATH="$CONDA_PREFIX/lib/server/libjvm.so"
 
 # Variables for better control
 BASE_DIR="/home/guest/r12922050/GitHub/d2qplus"
-DATASET="nfcorpus"
+DATASET="CSFCube-1.1"
 
-# List of query names to iterate through
+# List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "doc_add_topic_top_1_keywords"
-    "doc_add_topic_top_3_keywords"
-    "doc_add_topic_top_5_keywords"
-    "doc_add_topic_top_10_keywords"
+    "text_only"
 )
 
 # Remember if want to do dense indexing, need to pass --do-dense flag
@@ -21,7 +18,7 @@ GEN_QUERY_NAMES=(
 # Iterate through each query name
 for GEN_QUERY_NAME in "${GEN_QUERY_NAMES[@]}"; do
     echo "=========================================="
-    echo "Currently running evaluation for: $GEN_QUERY_NAME"
+    echo "Currently running evaluation for: $DATASET _ $GEN_QUERY_NAME"
     echo "=========================================="
     
     python3 $BASE_DIR/src/eval.py \
@@ -34,5 +31,4 @@ for GEN_QUERY_NAME in "${GEN_QUERY_NAMES[@]}"; do
     echo "Completed evaluation for: $GEN_QUERY_NAME"
     echo ""
 done
-
 echo "All evaluations completed!"

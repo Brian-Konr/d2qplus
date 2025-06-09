@@ -70,7 +70,6 @@ def run_topic_modeling(
     corpus_topics_out_path = os.path.join(base_output_dir, "doc_topics.jsonl")
     topic_info_dataframe_out = os.path.join(base_output_dir, "topic_info_dataframe.pkl")
     topic_info_csv_out = os.path.join(base_output_dir, "topic_info_dataframe.csv")
-    topic_model_out = os.path.join(base_output_dir, "bertopic_model")
 
     with open(corpus_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -149,7 +148,8 @@ def run_topic_modeling(
     print(f"Wrote topic model info to '{topic_info_dataframe_out}'")
 
     # Optionally save the BERTopic model
-    if topic_model_out:
+    if args.save_topic_model:
+        topic_model_out = os.path.join(base_output_dir, "bertopic_model")
         os.makedirs(os.path.dirname(topic_model_out) or ".", exist_ok=True)
         topic_model.save(topic_model_out)
         print(f"Saved BERTopic model to '{topic_model_out}'")
@@ -174,6 +174,7 @@ def main():
     parser.add_argument("--top_n_words", type=int, default=10, help="Number of top words per topic to extract.")
     parser.add_argument("--n_gram_range", type=lambda x: tuple(map(int, x.split(','))), default="1,3", help="Range of n-grams to consider for topic keywords (min,max)")
     parser.add_argument("--reduce_outliers", action="store_true", help="Reduce outliers in topic model.")
+    parser.add_argument("--save_topic_model", action="store_true", default=False, help="Save the BERTopic model to disk.")
 
 
     args = parser.parse_args()
