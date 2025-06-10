@@ -132,6 +132,7 @@ def run_topic_modeling(
 
     """
     #TODOS 我覺得可以 bertopic 出來的東西直接用 KeyBERT 對每個 sentence 對應的 topic 做更新，並且用 KeyBERT 給 keywords
+    問題會是這樣要考慮 topic centroids，
     """
     os.makedirs(os.path.dirname(corpus_topics_out_path) or ".", exist_ok=True)
     with open(corpus_topics_out_path, "w", encoding="utf-8") as fout:

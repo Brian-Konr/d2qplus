@@ -1,11 +1,192 @@
-from util import read_jsonl, read_txt
-from constants import USER_PROMPT_TOPIC_TEMPLATE, USER_PROMPT_TEMPLATE
+from .util import read_jsonl, read_txt
+import pandas as pd
+from typing import List, Any
+from .constants import USER_PROMPT_TOPIC_WITH_WEIGHT_TEMPLATE, USER_PROMPT_TEMPLATE, USER_PROMPT_TOPIC_WITHOUT_WEIGHT_TEMPLATE
+
+def get_topic_info_dict(enhanced_topic_info_pkl: str) -> dict:
+    """
+    get topic information dictionary where key is topic ID and value is a dictionary with 'keywords' and 'Enhanced_Topic'.
+    """
+    topic_dict = {}
+    enhanced_df = pd.read_pickle(enhanced_topic_info_pkl)
+    for _, row in enhanced_df.iterrows():
+        topic_id = row['Topic']
+        topic_dict[topic_id] = {
+            'keywords': row['Representation'],
+            'Enhanced_Topic': row['Enhanced_Topic']
+        }
+    return topic_dict
+
+def combine_topic_info(enhanced_topic_info_pkl: str, corpus_topics_path: str, corpus_path: str) -> List[dict]:
+    """
+    Enhance corpus topics with corpus text & title, topic representation (keywords) and topic NL description 及 weights 
+
+    - enhanced_topic_info_pkl: Path to the topic information pickle with enhanced llm representation (e.g., topic_info_dataframe_enhanced.pkl)
+    - corpus_topics_path: Path to the corpus topics JSONL file (e.g., augmented-data/CSFCube-1.1/doc_topics.jsonl)
+    - corpus_path: Path to the original corpus JSONL file (e.g., augmented-data/CSFCube-1.1/corpus.jsonl)
+
+    Returns:
+        List of dictionaries with enhanced corpus topics, each containing:
+        - doc_id: Document ID
+        - text: Document text
+        - title: Document title (if available)
+        - topics: List of topics with their IDs, weights, keywords, and enhanced topic descriptions.
+    """
+    topic_info_dict = get_topic_info_dict(enhanced_topic_info_pkl)
+    corpus_topics = read_jsonl(corpus_topics_path) # doc_id, "topics": [{"topic_id": 1, "weight": 0.5}, ...]
+    corpus = read_jsonl(corpus_path)
+    doc_id2doc = {doc['_id']: doc for doc in corpus}  # Map doc_id to document content (text, title)
+    
+    enhanced_corpus_topics = []
+    for doc in corpus_topics:
+        doc_id = doc['doc_id']
+        topics = doc.get('topics', [])
+        
+        enhanced_topics = []
+        for topic in topics:
+            topic_id = topic['topic_id']
+            if topic_id in topic_info_dict:
+                enhanced_topic = {
+                    'topic_id': topic_id,
+                    'weight': topic['weight'],
+                    'Representation': topic_info_dict[topic_id]['keywords'],
+                    'Enhanced_Topic': topic_info_dict[topic_id]['Enhanced_Topic']
+                }
+                enhanced_topics.append(enhanced_topic)
+        
+        enhanced_corpus_topics.append({
+            'doc_id': doc_id,
+            'text': doc_id2doc[doc_id]['text'],
+            'title': doc_id2doc[doc_id]['title'] if 'title' in doc_id2doc[doc_id] else '',
+            'topics': enhanced_topics
+        })
+    
+    return enhanced_corpus_topics
+
+def prepare_prompts(
+        data, 
+        max_keywords=15, 
+        max_topics=5, 
+        random_pick_keywords=False, 
+        proportional_selection=True, 
+        with_topic_weights=True,
+    ):
+    """
+    Prepare prompts for documents with keyword and topic guidance.
+    
+    Args:
+        data: List of documents with 'title', 'text', and 'topics' fields
+        max_keywords: Maximum number of keywords to include
+        max_topics: Maximum number of topics to include
+        random_pick_keywords: If True, randomly pick keywords from topics; otherwise pick top keywords
+        proportional_selection: If True, select keywords proportionally based on topic weights
+        with_topic_weights: If True, include topic weights in prompt; otherwise only include topic names
+        with_topic_keywords: If True, include topic keywords in the prompt
+    
+    Returns:
+        List of documents with added 'prompt', 'keywords', 'formatted_topics' fields
+    """
+    import random
+    
+    print(f"📝 Preparing prompts for {len(data)} documents...")
+    print(f"  - Max keywords: {max_keywords}, Max topics: {max_topics}")
+    print(f"  - Random keywords: {random_pick_keywords}, Proportional: {proportional_selection}")
+    print(f"  - With topic weights: {with_topic_weights}")
+    
+    sample_shown = False
+    
+    for i, d in enumerate(data):
+        doc_content = d['title'] + "\n" + d['text']
+        topics = d['topics']
+
+        # sort topics based on weight and limit to max_topics
+        topics = sorted(topics, key=lambda x: x['weight'], reverse=True)[:max_topics]
+        
+        if proportional_selection:
+            # Calculate total weight for normalization
+            total_weight = sum(t['weight'] for t in topics)
+            if total_weight == 0:
+                # If no topics have weight, distribute equally
+                normalized_weights = [1.0/len(topics) for _ in topics]
+            else:
+                normalized_weights = [t['weight'] / total_weight for t in topics]
+            
+            # Collect keywords from all topics proportionally
+            all_keywords = []
+            for topic, norm_weight in zip(topics, normalized_weights):
+                topic_keywords = topic.get('Representation', [])
+                # Calculate how many keywords to pick from this topic
+                num_keywords_from_topic = max(1, int(max_keywords * norm_weight))
+                
+                if random_pick_keywords:
+                    # Randomly sample keywords
+                    selected_keywords = random.sample(
+                        topic_keywords, 
+                        min(num_keywords_from_topic, len(topic_keywords))
+                    )
+                else:
+                    # Take top keywords
+                    selected_keywords = topic_keywords[:num_keywords_from_topic]
+                
+                all_keywords.extend(selected_keywords)
+        else:
+            # Collect all keywords from all topics first
+            all_keywords = []
+            for topic in topics:
+                topic_keywords = topic.get('Representation', [])
+                all_keywords.extend(topic_keywords)
+            
+            # Remove duplicates
+            all_keywords = list(dict.fromkeys(all_keywords))  # preserves order
+            
+            # Randomly pick up to max_keywords
+            if len(all_keywords) > max_keywords:
+                all_keywords = random.sample(all_keywords, max_keywords)
+        
+        # Remove duplicates while preserving order and limit to max_keywords
+        seen = set()
+        unique_keywords = []
+        for kw in all_keywords:
+            if kw not in seen and len(unique_keywords) < max_keywords:
+                seen.add(kw)
+                unique_keywords.append(kw)
+        
+        keywords_str = ', '.join(unique_keywords)
+        
+        # format topics for prompt
+        if with_topic_weights:
+            topics_str = ', '.join([f"{t['Enhanced_Topic']} ({t['weight']})" for t in topics])
+        else:
+            topics_str = ', '.join([t['Enhanced_Topic'] for t in topics])
+
+        # Select prompt template based on parameters
+        if with_topic_weights:
+            template = USER_PROMPT_TOPIC_WITH_WEIGHT_TEMPLATE
+        else:
+            template = USER_PROMPT_TOPIC_WITHOUT_WEIGHT_TEMPLATE
+        prompt = template.replace("[DOCUMENT]", doc_content).replace("[KEYWORDS]", keywords_str).replace("[TOPICS]", topics_str)
+        
+        d['prompt'] = prompt
+        d['keywords'] = unique_keywords  # Store selected keywords
+        d['formatted_topics'] = topics_str  # Store formatted topics for reuse
+        
+        # Show sample for first document
+        if i == 0 and not sample_shown:
+            print(f"📄 Sample document preparation:")
+            print(f"  - Selected {len(unique_keywords)} keywords: {keywords_str[:100]}...")
+            print(f"  - Selected {len(topics)} topics: {topics_str[:100]}...")
+            sample_shown = True
+    
+    print(f"✅ Prompt preparation completed")
+    return data
 
 def prepare_training_data(
         integrated_data_path, 
         drop_no_topics=False, 
         max_keywords=10, 
-        max_topics=5
+        max_topics=5,
+        with_topic_weights=True,
+        prompt_template="topic_with_weight"
     ):
     """
     Take integrated data and perform following steps:
@@ -21,29 +202,15 @@ def prepare_training_data(
     data = read_jsonl(integrated_data_path)
     if drop_no_topics:
         data = [d for d in data if d['topics']]
-    # prepare prompt
-    for d in data:
-        doc_content = d['title'] + "\n" + d['text']
-        keywords = d['keywords']
-        topics = d['topics']
-
-        # sort keywords based on score
-        keywords = sorted(keywords, key=lambda x: x[1], reverse=True)[:max_keywords]
-        keywords_str = ', '.join([f"{k[0]}" for k in keywords])
-        # convert keywords to dict format because load_dataset cannot mix the values with different types
-        d['keywords'] = [
-            {"key": k, "weight": w}
-            for k, w in d["keywords"]
-        ]
-
-        # format topics
-        topics = sorted(topics, key=lambda x: x['weight'], reverse=True)[:max_topics]
-        topics_str = ', '.join([f"{t['Enhanced_Topic']} ({t['weight']})" for t in topics])
-
-        # create prompt
-        prompt = USER_PROMPT_TOPIC_TEMPLATE.replace("[DOCUMENT]", doc_content).replace("[KEYWORDS]", keywords_str).replace("[TOPICS]", topics_str)
-        
-        d['prompt'] = prompt
+    
+    # prepare prompts using the extracted function
+    data = prepare_prompts(
+        data, 
+        max_keywords=max_keywords, 
+        max_topics=max_topics,
+        with_topic_weights=with_topic_weights,
+        prompt_template=prompt_template
+    )
     return data
 
 def save_document_vectors(model_name, data_path, out_path):
