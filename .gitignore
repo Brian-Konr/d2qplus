@@ -13,10 +13,15 @@ wandb/*
 runs/
 scored/
 gen/
+gen
 index/
 data/
+data
 
 built-index/
+built-index
 augmented-data/
+augmented-data
 
 outputs/
+outputs
