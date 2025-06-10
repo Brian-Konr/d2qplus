@@ -2,8 +2,8 @@
 # filepath: /home/guest/r12922050/GitHub/d2qplus/scripts/d2q_gen_vllm.sh
 export CUDA_VISIBLE_DEVICES=0,1
 # Configuration variables
-BASE_PATH="/home/guest/r12922050/GitHub/d2qplus"
-DATASET="nfcorpus"
+BASE_PATH="/home/guest/r13944029/IRLab/d2qplus"
+DATASET="CFCube-1.1"
 DATA_FILE="data_with_prompt_3.jsonl"
 MODEL="meta-llama/Llama-3.2-1B-Instruct"
 TRAINED_MODEL="/home/guest/r12922050/GitHub/d2qplus/outputs/Llama-3.2-1B-Instruct-GRPO-separate-reward/checkpoint-1798"

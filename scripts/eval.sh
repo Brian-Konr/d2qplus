@@ -1,16 +1,19 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 export JAVA_HOME="$CONDA_PREFIX"
-export JVM_PATH="$CONDA_PREFIX/lib/server/libjvm.so"
+export JVM_PATH="$CONDA_PREFIX/lib/jvm/lib/server/libjvm.so"
 
 # Variables for better control
-BASE_DIR="/home/guest/r12922050/GitHub/d2qplus"
+BASE_DIR="/home/guest/r13944029/IRLab/d2qplus"
 DATASET="CSFCube-1.1"
 
 # List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "t5_20q"
+    "text_add_top_1_topic_keywords"
+    "text_add_top_3_topic_keywords"
+    "text_add_top_5_topic_keywords"
+    "text_add_top_10_topic_keywords"
 )
 
 # Remember if want to do dense indexing, need to pass --do-dense flag
@@ -27,7 +30,7 @@ for GEN_QUERY_NAME in "${GEN_QUERY_NAMES[@]}"; do
         --qrels $BASE_DIR/data/$DATASET/qrels/test.trec \
         --index-base-dir $BASE_DIR/built-index/$DATASET \
         --index-name $GEN_QUERY_NAME \
-        --output $BASE_DIR/eval/$DATASET/$GEN_QUERY_NAME.csv
+        --output $BASE_DIR/eval/$DATASET/kcw/$GEN_QUERY_NAME.csv
     echo "Completed evaluation for: $GEN_QUERY_NAME"
     echo ""
 done

@@ -16,6 +16,7 @@ from hdbscan import HDBSCAN
 from sentence_transformers import SentenceTransformer
 from bertopic.representation import KeyBERTInspired, PartOfSpeech, MaximalMarginalRelevance
 from sklearn.feature_extraction.text import CountVectorizer
+import numpy as np
 
 random.seed(42)
 
@@ -67,7 +68,7 @@ def run_topic_modeling(
         print(f"Error: '{corpus_path}' not found.", file=sys.stderr)
         sys.exit(1)
     
-    corpus_topics_out_path = os.path.join(base_output_dir, "doc_topics.jsonl")
+    corpus_topics_out_path = os.path.join(base_output_dir, f"doc_topics_{args.reduce_outliers}_{args.reduce_outliers_threshold}.jsonl")
     topic_info_dataframe_out = os.path.join(base_output_dir, "topic_info_dataframe.pkl")
     topic_info_csv_out = os.path.join(base_output_dir, "topic_info_dataframe.csv")
 
@@ -120,10 +121,11 @@ def run_topic_modeling(
     # Fit and transform
     topics, probs = topic_model.fit_transform(chunks)
 
-    if args.reduce_outliers:
+    if args.reduce_outliers is not None:
         # Reduce outliers if specified
         print("Reducing outliers...")
-        topics = topic_model.reduce_outliers(chunks, topics, probabilities=probs, strategy="probabilities")
+        thresh = np.percentile(probs, args.reduce_outliers_threshold)
+        topics = topic_model.reduce_outliers(chunks, topics, probabilities=probs, strategy=args.reduce_outliers, threshold=thresh)
         topic_model.update_topics(chunks, topics=topics)
 
     # Aggregate per document and write output
@@ -181,7 +183,9 @@ def main():
     parser.add_argument("--min_topic_size", type=int, default=3, help="Minimum topic size for BERTopic.")
     parser.add_argument("--top_n_words", type=int, default=10, help="Number of top words per topic to extract.")
     parser.add_argument("--n_gram_range", type=lambda x: tuple(map(int, x.split(','))), default="1,3", help="Range of n-grams to consider for topic keywords (min,max)")
-    parser.add_argument("--reduce_outliers", action="store_true", help="Reduce outliers in topic model.")
+    # parser.add_argument("--reduce_outliers", action="store_true", help="Reduce outliers in topic model.")
+    parser.add_argument("--reduce_outliers", type=str, default=None, help="Reduce outliers in topic model, pass in the mode.")
+    parser.add_argument("--reduce_outliers_threshold", type=float, default=0, help="Percentile threshold for outlier reduction (0-100).")
     parser.add_argument("--save_topic_model", action="store_true", default=False, help="Save the BERTopic model to disk.")
 
 
