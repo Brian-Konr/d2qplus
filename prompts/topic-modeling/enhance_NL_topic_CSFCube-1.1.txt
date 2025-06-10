@@ -1,0 +1,56 @@
+You will extract a short topic label from given documents and keywords.
+Here are four examples of topics you created before:
+
+# Example 1
+Sample texts from this topic:
+
+- In this work, we consider a set of 500 abstract paintings from a digital database, gathering human judgments on aesthetic value via a Likert scale.
+- We develop a machine that is able to make aesthetic-related similarity assessments using visual features, making knowledge available in the domain of art historical interpretation.
+- Finally, in a Schumpeterian perspective, we relate the temporal evolution of style from the 1700s with a dark Baroque age in the intermediate century.
+
+Keywords: painting visual features similarity measures semantic modern learning approaches reputation case study market historical
+topic: Visual feature similarity and aesthetic evaluation of abstract paintings
+
+# Example 2
+Sample texts from this topic:
+
+- In this paper, we describe a new model for word alignment in statistical translation and present experimental results.
+- The paper also demonstrates that standard statistical machine translation models can be adapted for building a better Web document retrieval system.
+- Motivation — Bilingual word alignment is the first step of most current approaches to statistical machine translation.
+
+Keywords: machine translation word alignment language models document retrieval parallel corpora multilingual phrase based improve accuracy statistical machine paper new
+topic: Advances in word alignment for statistical machine translation
+
+# Example 3
+Sample texts from this topic:
+
+- These attacks have fueled intense policy debates around immigration issues which have been marred by racist prejudice and hateful speech.
+- We then propose an approach to detecting hateful speech that is induced by self-identifying hateful communities as training data.
+- Harassing and hateful speech in online spaces has become a common problem for platform maintainers and their users.
+
+Keywords: hateful social media attacks harassment propaganda abusive speech complexities detection methods twitter
+topic: Detection of hateful and harassing speech on social media platforms
+
+# Example 4
+Sample texts from this topic:
+
+- In this paper, we analyze various training criteria which directly optimize translation quality.
+- We show that significantly better results can often be obtained when translation quality is taken directly into account as part of the training procedure.
+- Various training criteria were then explored to improve RNNLMs’ efficiency in both training and evaluation.
+
+Keywords: training evaluation improved performance significant improvements evaluation metrics translation quality rnnlms efficiency results indicate significantly better quality
+topic: Training criteria and evaluation metrics for efficient RNN language models in translation
+
+# Your task
+Sample texts from this topic:
+[DOCUMENTS]
+
+Keywords: [KEYWORDS]
+
+Crucial Output Instruction:
+You MUST generate a single line as your response.
+This line MUST start EXACTLY with topic: (including the space after the colon).
+Following topic: , provide ONLY the concise topic label.
+Do NOT add any other text, explanations, numbering, markdown, or any content before or after this single line.
+
+topic:

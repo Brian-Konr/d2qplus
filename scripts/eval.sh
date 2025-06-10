@@ -10,10 +10,7 @@ DATASET="CSFCube-1.1"
 
 # List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "text_add_top_1_topic_keywords"
-    "text_add_top_3_topic_keywords"
-    "text_add_top_5_topic_keywords"
-    "text_add_top_10_topic_keywords"
+    "t5_20q"
 )
 
 # Remember if want to do dense indexing, need to pass --do-dense flag
