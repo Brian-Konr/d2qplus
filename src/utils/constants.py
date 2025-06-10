@@ -1,7 +1,7 @@
 # system prompt
 import os
 
-FIXED_NUMBER_OF_QUERIES = 10
+FIXED_NUMBER_OF_QUERIES = 5
 
 TOPIC_REPRESENTATION_SYSTEM_PROMPT = "You are an AI assistant that specializes in precise data extraction and strictly adheres to output formatting instructions. Your goal is to generate only the requested output format without any additional text."
 
@@ -30,10 +30,8 @@ Rules:
 
 When generating the queries, document content, topics and keywords information should all be considered:
 
-- **Implicitly cover** the document’s topics in proportion to their weights:  
-   - High-weight topics should steer more of your queries’ framing.  
+- **Implicitly cover** the document’s topics:
    - You may express topics via synonyms, broader phrases, or context (e.g., topic “survival analysis” → “risk estimation over time”).
-   - Ensure your {FIXED_NUMBER_OF_QUERIES} queries, as a set, reflect the topic balance.
 
 - **Explicitly include** the document’s keywords
    - Embed them naturally (e.g., “breast cancer death” can appear as is).
@@ -41,13 +39,25 @@ When generating the queries, document content, topics and keywords information s
 
 
 # - User prompts -
-USER_PROMPT_TEMPLATE = f"""Read the following document and generate {FIXED_NUMBER_OF_QUERIES} relevant queries that can be answered by this document.
+USER_PROMPT_TEMPLATE = f"""Read the following document and generate {FIXED_NUMBER_OF_QUERIES} relevant queries for this document.
 
 Document:
 [DOCUMENT]
 """
 
-USER_PROMPT_TOPIC_TEMPLATE = f"""Here is an example document with keywords and weighted topics. Generate {FIXED_NUMBER_OF_QUERIES} queries without any additional text:
+USER_PROMPT_TOPIC_WITHOUT_WEIGHT_TEMPLATE = f"""Here is an example document with keywords and topics. Generate {FIXED_NUMBER_OF_QUERIES} relevant queries for this document:
+
+Document:
+[DOCUMENT]
+
+Keywords:
+[KEYWORDS]
+
+Topics:
+[TOPICS]
+"""
+
+USER_PROMPT_TOPIC_WITH_WEIGHT_TEMPLATE = f"""Here is an example document with keywords and weighted topics. Generate {FIXED_NUMBER_OF_QUERIES} relevant queries for this document where high-weight topics should steer more of your queries’ framing.
 
 Document:
 [DOCUMENT]

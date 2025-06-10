@@ -10,7 +10,7 @@ DATASET="CSFCube-1.1"
 
 # List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "t5_20q"
+    "without_topic_llama_1b"
 )
 
 # Remember if want to do dense indexing, need to pass --do-dense flag
