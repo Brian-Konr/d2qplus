@@ -18,7 +18,7 @@ GEN_QUERY_NAMES=(
 # Iterate through each query name
 for GEN_QUERY_NAME in "${GEN_QUERY_NAMES[@]}"; do
     echo "=========================================="
-    echo "Currently running evaluation for: $DATASET _ $GEN_QUERY_NAME"
+    echo "Currently running evaluation for: $DATASET - $GEN_QUERY_NAME"
     echo "=========================================="
     
     python3 $BASE_DIR/src/eval.py \

@@ -166,13 +166,13 @@ def main():
     metrics = [
         {"metric": "recip_rank", "round": 4}, # MRR
         {"metric": "map", "round": 4},
+        {"metric": "map_cut_10", "round": 4},
+        {"metric": "map_cut_20", "round": 4},
         {"metric": "ndcg_cut_10", "round": 4},
         {"metric": "ndcg_cut_20", "round": 4},
         {"metric": "recall_50", "round": 4},
         {"metric": "recall_100", "round": 4},
-        {"metric": "recall_150", "round": 4},
         {"metric": "recall_200", "round": 4},
-        {"metric": "recall_250", "round": 4},
         {"metric": "recall_300", "round": 4}
     ]
     # Run and evaluate
