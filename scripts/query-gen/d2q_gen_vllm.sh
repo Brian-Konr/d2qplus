@@ -4,7 +4,7 @@ export CUDA_VISIBLE_DEVICES=6,7
 
 # Job Control - set which jobs to run (space-separated list)
 # Options: "base_with_topic", "base_without_topic", "trained_with_topic"
-JOBS_TO_RUN="base_with_topic"
+JOBS_TO_RUN="base_without_topic"
 
 # Configuration variables
 BASE_PATH="/home/guest/r12922050/GitHub/d2qplus"
