@@ -41,67 +41,34 @@ def parse_args():
     parser.add_argument("--max_topics", type=int, default=5, help="Maximum number of topics for dynamic prompt generation")
     parser.add_argument("--random_pick_keywords", action="store_true", default=False, help="Randomly pick keywords instead of taking top ones")
     parser.add_argument("--proportional_selection", action="store_true", default=True, help="Select keywords proportionally based on topic weights")
+    
+    # Document truncation parameters
+    parser.add_argument("--max_doc_tokens", type=int, default=1024, help="Maximum number of tokens for document truncation")
 
     return parser.parse_args()
 
 
-def select_few_shot_examples(
-    few_shot_examples: List[dict], 
-    base_prompt: str, 
-    document_text: str, 
-    tokenizer, 
-    max_model_len: int,
-    max_tokens_output: int = 512
-) -> List[dict]:
+def truncate_document(text: str, tokenizer, max_tokens: int = 1024) -> str:
     """
-    Incrementally add few-shot examples until token limit is reached.
-    Automatically calculates available tokens for few-shot examples.
+    Truncate document text to fit within specified token limit.
     
     Args:
-        few_shot_examples: List of few-shot examples
-        base_prompt: Base system prompt without examples
-        document_text: The document text for user prompt
+        text: Document text to truncate
         tokenizer: VLLM tokenizer
-        max_model_len: Maximum total tokens allowed by the model
-        max_tokens_output: Maximum tokens reserved for generation output
+        max_tokens: Maximum number of tokens allowed
     
     Returns:
-        Selected few-shot examples that fit within token limits
+        Truncated document text
     """
-    from utils.constants import PROMPTAGATOR_USER_PROMPT
+    tokens = tokenizer.encode(text)
+    if len(tokens) <= max_tokens:
+        return text
     
-    # Calculate base tokens (system prompt + user prompt without examples)
-    user_prompt = PROMPTAGATOR_USER_PROMPT.replace("[DOCUMENT]", document_text)
-    base_tokens = len(tokenizer.encode(base_prompt)) + len(tokenizer.encode(user_prompt))
+    # Truncate tokens and decode back to text
+    truncated_tokens = tokens[:max_tokens]
+    truncated_text = tokenizer.decode(truncated_tokens)
     
-    # Calculate available tokens for few-shot examples
-    # Reserve tokens for generation output and some safety buffer
-    safety_buffer = 50  # Small safety buffer
-    available_tokens = max_model_len - base_tokens - max_tokens_output - safety_buffer
-    
-    if available_tokens <= 0:
-        print(f"⚠️  Warning: No tokens available for few-shot examples. Base prompt uses {base_tokens} tokens, need {max_tokens_output} for output.")
-        return []
-    
-    print(f"📊 Token allocation: Base={base_tokens}, Output={max_tokens_output}, Available for examples={available_tokens}")
-    
-    selected_examples = []
-    current_example_tokens = 0
-    
-    for example in few_shot_examples:
-        # Format the example as it would appear in the prompt
-        example_text = f"Article: {example['doc_text']}\nQuery: {example['query_text']}\n\n"
-        example_tokens = len(tokenizer.encode(example_text))
-        
-        # Check if adding this example would exceed the limit
-        if current_example_tokens + example_tokens > available_tokens:
-            break
-            
-        selected_examples.append(example)
-        current_example_tokens += example_tokens
-    
-    print(f"📝 Selected {len(selected_examples)}/{len(few_shot_examples)} few-shot examples ({current_example_tokens} tokens)")
-    return selected_examples
+    return truncated_text
 
 
 def make_messages(
@@ -115,7 +82,10 @@ def make_messages(
         max_topics: int = 5,
         random_pick_keywords: bool = False,
         proportional_selection: bool = True,
-        num_of_queries: int = 5
+        num_of_queries: int = 5,
+        # Document truncation parameters
+        tokenizer = None,
+        max_doc_tokens: int = 1024
     ) -> List[dict]:
     """
     make conversation messages for LLM to generate queries based on the provided documents.
@@ -147,6 +117,11 @@ def make_messages(
         )
     for doc in data:
         text = doc['text']
+        
+        # Truncate document if tokenizer is provided
+        if tokenizer is not None:
+            text = truncate_document(text, tokenizer, max_doc_tokens)
+        
         sys_prompt = {}
         user_prompt = {}
         if prompt_template == "d2q":
@@ -158,7 +133,7 @@ def make_messages(
                 user_prompt = {"role": "user", "content": USER_PROMPT_TEMPLATE.replace("[DOCUMENT]", text)}
         elif prompt_template == "promptagator":
             prompt = PROMPTAGATOR_SYS_PROMPT
-            for example in few_shot_examples[:4]:
+            for example in few_shot_examples[:5]:
                 prompt += f"Article: {example['doc_text']}\n"
                 prompt += f"Query: {example['query_text']}\n\n"
             sys_prompt = {"role": "system", "content": prompt}
@@ -235,8 +210,16 @@ if __name__ == "__main__":
         few_shot_examples = read_jsonl(args.few_shot_examples_path)
         print(f"📝 Loaded {len(few_shot_examples)} few-shot examples")
     
+    # Initialize vllm
+    print(f"🚀 Initializing VLLM with model: {args.model}")
+    llm = LLM(model=args.model, tensor_parallel_size=args.tensor_parallel_size, gpu_memory_utilization=args.gpu_memory_utilization, max_model_len=args.max_model_len)
+    
+    # Get tokenizer for document truncation
+    tokenizer = llm.get_tokenizer()
+    
     # Create messages for vllm
     print(f"🛠️ Creating messages for generation...")
+    print(f"📏 Document truncation: max {args.max_doc_tokens} tokens")
     messages = make_messages(
         corpus, 
         with_topic_keywords=args.with_topic_keywords,
@@ -247,7 +230,9 @@ if __name__ == "__main__":
         max_topics=args.max_topics,
         random_pick_keywords=args.random_pick_keywords,
         proportional_selection=args.proportional_selection,
-        num_of_queries=args.num_of_queries
+        num_of_queries=args.num_of_queries,
+        tokenizer=tokenizer,
+        max_doc_tokens=args.max_doc_tokens
     )
     
     print(f"✅ Created {len(messages)} messages")
@@ -263,10 +248,6 @@ if __name__ == "__main__":
         print("🧪 Test mode: only processing the first 10 documents.")
         print(f"💾 Test messages saved to test_messages.jsonl for verification.")
 
-    # Initialize vllm
-    print(f"🚀 Initializing VLLM with model: {args.model}")
-    llm = LLM(model=args.model, tensor_parallel_size=args.tensor_parallel_size, gpu_memory_utilization=args.gpu_memory_utilization, max_model_len=args.max_model_len)
-    
     # Set sampling parameters
     sampling_params = SamplingParams(
         temperature=args.temperature,

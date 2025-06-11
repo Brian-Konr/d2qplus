@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument("--max_model_len", type=int, default=8192, help="Maximum model length")
     parser.add_argument("--max_tokens_output", type=int, default=512, help="Maximum tokens for generation output")
     parser.add_argument("--output_dir", type=str, default="./token_analysis", help="Output directory for analysis results")
-    parser.add_argument("--sample_size", type=int, default=1000, help="Sample size for analysis (0 = all data)")
+    parser.add_argument("--sample_size", type=int, default=0, help="Sample size for analysis (0 = all data)")
     
     return parser.parse_args()
 

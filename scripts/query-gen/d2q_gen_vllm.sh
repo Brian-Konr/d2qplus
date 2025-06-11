@@ -19,7 +19,7 @@ TRAINED_MODEL="/home/guest/r12922050/GitHub/d2qplus/outputs/Llama-3.2-1B-Instruc
 # VLLM Configuration
 TENSOR_PARALLEL_SIZE=2
 GPU_MEMORY_UTILIZATION=0.9
-MAX_MODEL_LEN=2048
+MAX_MODEL_LEN=4000
 
 # Sampling Parameters
 TEMPERATURE=0.8
