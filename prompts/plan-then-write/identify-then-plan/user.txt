@@ -1,0 +1,13 @@
+Generate relevant search queries for the following document:
+
+<doc_snippet>
+-----
+Rules
+1. Extract topics as 3-8 short noun phrases.  
+2. For each topic list 2-4 key phrases that are distinctive within the given text.  
+3. Produce a plan array enclosed in <PLAN></PLAN>: each item = {"query_id": i, "topics": [...], "keywords": [...]}.  
+   • Each topic must appear in ≥1 plan item.  
+   • Try to group related topics so one query can cover them.  
+4. After the plan, output queries enclosed in <QUERY></QUERY> – same order as plan.  
+   • Each query on a separate line with no additional text.
+5. Keep each query ≤20 tokens, natural language, include ≥1 listed keyword.

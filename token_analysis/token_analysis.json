@@ -1,0 +1,63 @@
+{
+  "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+  "max_model_len": 8192,
+  "max_tokens_output": 512,
+  "sample_size": 1000,
+  "document_analysis": {
+    "doc_tokens": {
+      "count": 1000,
+      "min": 20,
+      "max": 2253,
+      "mean": 326.981,
+      "median": 320.0,
+      "std": 142.03139637614126,
+      "percentiles": {
+        "25th": 243.25,
+        "75th": 395.0,
+        "90th": 465.8,
+        "95th": 532.85,
+        "99th": 690.68
+      }
+    },
+    "user_prompt_tokens": {
+      "count": 1000,
+      "min": 74,
+      "max": 2306,
+      "mean": 379.854,
+      "median": 373.0,
+      "std": 142.06341787630868,
+      "percentiles": {
+        "25th": 296.25,
+        "75th": 448.0,
+        "90th": 518.8,
+        "95th": 585.85,
+        "99th": 743.68
+      }
+    }
+  },
+  "example_analysis": {
+    "count": 8,
+    "min": 189,
+    "max": 452,
+    "mean": 309.625,
+    "median": 307.5,
+    "std": 85.14850472640643,
+    "percentiles": {
+      "25th": 235.25,
+      "75th": 374.5,
+      "90th": 452,
+      "95th": 452,
+      "99th": 452
+    }
+  },
+  "system_prompt_analysis": {
+    "d2q_basic": 137,
+    "d2q_with_topic": 234,
+    "promptagator_base": 28,
+    "promptagator_with_1_examples": 412,
+    "promptagator_with_2_examples": 727,
+    "promptagator_with_3_examples": 1025,
+    "promptagator_with_4_examples": 1293,
+    "promptagator_with_5_examples": 1516
+  }
+}

@@ -3,13 +3,13 @@ export CUDA_VISIBLE_DEVICES=6,7
 
 
 # Job Control - set which jobs to run (space-separated list)
-# Options: "base_with_topic", "base_without_topic", "trained_with_topic"
-JOBS_TO_RUN="base_without_topic"
+# Options: "base_with_topic", "base_without_topic", "trained_with_topic", plan-then-write-given-topics-plan, plan-then-write-identify-then-plan
+JOBS_TO_RUN="promptagator"
 
 # Configuration variables
 BASE_PATH="/home/guest/r12922050/GitHub/d2qplus"
-DATASET="CSFCube-1.1"
-TOPIC_DIR="0609-pritamdeka_scibert-biobert-pos-keybert-mmr"
+DATASET="nfcorpus"
+TOPIC_DIR="0606-pritamdeka-biobert-pos-keybert-mmr"
 
 MODEL="meta-llama/Llama-3.1-8B-Instruct"
 MODEL_NAME_FOR_SAVE=${MODEL##*/}  # Extract everything after the last '/'
@@ -23,10 +23,12 @@ MAX_MODEL_LEN=2048
 
 # Sampling Parameters
 TEMPERATURE=0.8
-MAX_TOKENS=512 # need to look at constants.py FIXED_NUMBER_OF_QUERIES to see how many queries model generates at a time
-RETURN_SEQUENCE_NUM=4 # actual query generated per document will be FIXED_NUMBER_OF_QUERIES (constants.py) * RETURN_SEQUENCE_NUM
-
+MAX_TOKENS=64 # need to look at constants.py FIXED_NUMBER_OF_QUERIES to see how many queries model generates at a time
+RETURN_SEQUENCE_NUM=20 # actual query generated per document will be FIXED_NUMBER_OF_QUERIES (constants.py) * RETURN_SEQUENCE_NUM
+NUM_OF_QUERIES_PER_DOC=5
 # TODOs: need to remove FIXED_NUMBER_OF_QUERIES in constants.py and use it here for better control
+
+TOTAL_TARGET_QUERIES=100
 
 # Prompt Parameters
 PROMPT_TEMPLATE="d2q"
@@ -114,6 +116,80 @@ if [[ " $JOBS_TO_RUN " =~ " base_without_topic " ]]; then
         --max_keywords ${MAX_KEYWORDS} \
         --max_topics ${MAX_TOPICS}
     echo "Base LLM without topic keywords generation completed"
+    echo "----------------------------------------"
+fi
+
+# Job 3: Base LLM without topic keywords
+if [[ " $JOBS_TO_RUN " =~ " plan-then-write-given-topics-plan " ]]; then
+    PROMPT_TEMPLATE="plan-then-write-identify-then-plan"
+    echo "Starting: ${MODEL} ${PROMPT_TEMPLATE} generation..."
+    python3 ${BASE_PATH}/src/generate.py \
+        --test \
+        --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
+        --corpus_path ${CORPUS_PATH} \
+        --corpus_topics_path ${CORPUS_TOPICS_PATH} \
+        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}.jsonl" \
+        --model ${MODEL} \
+        --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+        --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
+        --max_model_len ${MAX_MODEL_LEN} \
+        --temperature ${TEMPERATURE} \
+        --max_tokens ${MAX_TOKENS} \
+        --num_of_queries ${NUM_OF_QUERIES_PER_DOC} \
+        --return_sequence_num ${RETURN_SEQUENCE_NUM} \
+        --prompt_template ${PROMPT_TEMPLATE} \
+        --max_keywords ${MAX_KEYWORDS} \
+        --max_topics ${MAX_TOPICS}
+    echo "Base LLM ${PROMPT_TEMPLATE} completed"
+    echo "----------------------------------------"
+fi
+
+if [[ " $JOBS_TO_RUN " =~ " plan-then-write-identify-then-plan " ]]; then
+    PROMPT_TEMPLATE="plan-then-write-identify-then-plan"
+    echo "Starting: ${MODEL} ${PROMPT_TEMPLATE} generation..."
+    python3 ${BASE_PATH}/src/generate.py \
+        --test \
+        --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
+        --corpus_path ${CORPUS_PATH} \
+        --corpus_topics_path ${CORPUS_TOPICS_PATH} \
+        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}.jsonl" \
+        --model ${MODEL} \
+        --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+        --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
+        --max_model_len ${MAX_MODEL_LEN} \
+        --temperature ${TEMPERATURE} \
+        --max_tokens ${MAX_TOKENS} \
+        --num_of_queries ${NUM_OF_QUERIES_PER_DOC} \
+        --return_sequence_num ${RETURN_SEQUENCE_NUM} \
+        --prompt_template ${PROMPT_TEMPLATE} \
+        --max_keywords ${MAX_KEYWORDS} \
+        --max_topics ${MAX_TOPICS}
+    echo "Base LLM ${PROMPT_TEMPLATE} completed"
+    echo "----------------------------------------"
+fi
+
+if [[ " $JOBS_TO_RUN " =~ " promptagator " ]]; then
+    PROMPT_TEMPLATE="promptagator"
+    echo "Starting: ${MODEL} ${PROMPT_TEMPLATE} generation..."
+    python3 ${BASE_PATH}/src/generate.py \
+        --few_shot_examples_path /home/guest/r12922050/GitHub/d2qplus/prompts/promptagator/few_shot_examples.jsonl \
+        --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
+        --corpus_path ${CORPUS_PATH} \
+        --corpus_topics_path ${CORPUS_TOPICS_PATH} \
+        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}.jsonl" \
+        --model ${MODEL} \
+        --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+        --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
+        --max_model_len ${MAX_MODEL_LEN} \
+        --temperature ${TEMPERATURE} \
+        --max_tokens ${MAX_TOKENS} \
+        --num_of_queries ${NUM_OF_QUERIES_PER_DOC} \
+        --total_target_queries ${TOTAL_TARGET_QUERIES} \
+        --return_sequence_num ${RETURN_SEQUENCE_NUM} \
+        --prompt_template ${PROMPT_TEMPLATE} \
+        --max_keywords ${MAX_KEYWORDS} \
+        --max_topics ${MAX_TOPICS}
+    echo "Base LLM ${PROMPT_TEMPLATE} completed"
     echo "----------------------------------------"
 fi
 

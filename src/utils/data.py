@@ -84,7 +84,7 @@ def prepare_prompts(
         with_topic_keywords: If True, include topic keywords in the prompt
     
     Returns:
-        List of documents with added 'prompt', 'keywords', 'formatted_topics' fields
+        List of documents with added 'prompt', 'keywords', 'formatted_topics', and 'formatted_keywords' fields.
     """
     import random
     
@@ -169,6 +169,7 @@ def prepare_prompts(
         d['prompt'] = prompt
         d['keywords'] = unique_keywords  # Store selected keywords
         d['formatted_topics'] = topics_str  # Store formatted topics for reuse
+        d['formatted_keywords'] = keywords_str  # Store formatted keywords for reuse
         
         # Show sample for first document
         if i == 0 and not sample_shown:
@@ -186,7 +187,6 @@ def prepare_training_data(
         max_keywords=10, 
         max_topics=5,
         with_topic_weights=True,
-        prompt_template="topic_with_weight"
     ):
     """
     Take integrated data and perform following steps:
@@ -209,7 +209,6 @@ def prepare_training_data(
         max_keywords=max_keywords, 
         max_topics=max_topics,
         with_topic_weights=with_topic_weights,
-        prompt_template=prompt_template
     )
     return data
 

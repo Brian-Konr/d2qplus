@@ -1,13 +1,10 @@
 import json
 from typing import Any, List
-from utils.util import read_jsonl
+from utils.util import read_jsonl, read_txt
 from utils.data import combine_topic_info
 from pydantic import BaseModel, Field
 from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC, D2Q_SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, PROMPTAGATOR_SYS_PROMPT, PROMPTAGATOR_USER_PROMPT
 from vllm import LLM, SamplingParams
-from vllm.sampling_params import GuidedDecodingParams
-import pandas as pd
-import os
 import argparse
 
 def parse_args():
@@ -32,10 +29,12 @@ def parse_args():
     parser.add_argument("--return_sequence_num", type=int, default=1, help="Number of return sequences")
 
     # prompt parameters
+    parser.add_argument("--num_of_queries", type=int, default=5, help="Number of queries to generate per output")
+    parser.add_argument("--total_target_queries", type=int, default=10, help="Target number of queries per document")
     parser.add_argument("--with_topic_keywords", action="store_true", default=False, help="Use topic and keyword information in the prompts")
     parser.add_argument("--with_topic_weights", action="store_true", default=True, help="Include topic weights in prompts (only for D2Q template)")
-    parser.add_argument("--prompt_template", type=str, choices=["d2q", "promptagator", "inpars"], default="d2q", help="Prompt template to use for query generation") # d2q + with_topic_keywords = prompt template for D2Q with topic keywords information
-    parser.add_argument("--few_shot_examples_path", type=str, default=None, help="Path to the few-shot examples file (if using promptagator / InPars template)")
+    parser.add_argument("--prompt_template", type=str, default="d2q", help="Prompt template to use for query generation") # d2q + with_topic_keywords = prompt template for D2Q with topic keywords information
+    parser.add_argument("--few_shot_examples_path", type=str, default="/home/guest/r12922050/GitHub/d2qplus/prompts/promptagator/few_shot_examples.jsonl", help="Path to the few-shot examples file (if using promptagator / InPars template)")
     
     # Dynamic prompt generation parameters (for constructing 'prompt' field)
     parser.add_argument("--max_keywords", type=int, default=15, help="Maximum number of keywords for dynamic prompt generation")
@@ -44,6 +43,66 @@ def parse_args():
     parser.add_argument("--proportional_selection", action="store_true", default=True, help="Select keywords proportionally based on topic weights")
 
     return parser.parse_args()
+
+
+def select_few_shot_examples(
+    few_shot_examples: List[dict], 
+    base_prompt: str, 
+    document_text: str, 
+    tokenizer, 
+    max_model_len: int,
+    max_tokens_output: int = 512
+) -> List[dict]:
+    """
+    Incrementally add few-shot examples until token limit is reached.
+    Automatically calculates available tokens for few-shot examples.
+    
+    Args:
+        few_shot_examples: List of few-shot examples
+        base_prompt: Base system prompt without examples
+        document_text: The document text for user prompt
+        tokenizer: VLLM tokenizer
+        max_model_len: Maximum total tokens allowed by the model
+        max_tokens_output: Maximum tokens reserved for generation output
+    
+    Returns:
+        Selected few-shot examples that fit within token limits
+    """
+    from utils.constants import PROMPTAGATOR_USER_PROMPT
+    
+    # Calculate base tokens (system prompt + user prompt without examples)
+    user_prompt = PROMPTAGATOR_USER_PROMPT.replace("[DOCUMENT]", document_text)
+    base_tokens = len(tokenizer.encode(base_prompt)) + len(tokenizer.encode(user_prompt))
+    
+    # Calculate available tokens for few-shot examples
+    # Reserve tokens for generation output and some safety buffer
+    safety_buffer = 50  # Small safety buffer
+    available_tokens = max_model_len - base_tokens - max_tokens_output - safety_buffer
+    
+    if available_tokens <= 0:
+        print(f"⚠️  Warning: No tokens available for few-shot examples. Base prompt uses {base_tokens} tokens, need {max_tokens_output} for output.")
+        return []
+    
+    print(f"📊 Token allocation: Base={base_tokens}, Output={max_tokens_output}, Available for examples={available_tokens}")
+    
+    selected_examples = []
+    current_example_tokens = 0
+    
+    for example in few_shot_examples:
+        # Format the example as it would appear in the prompt
+        example_text = f"Article: {example['doc_text']}\nQuery: {example['query_text']}\n\n"
+        example_tokens = len(tokenizer.encode(example_text))
+        
+        # Check if adding this example would exceed the limit
+        if current_example_tokens + example_tokens > available_tokens:
+            break
+            
+        selected_examples.append(example)
+        current_example_tokens += example_tokens
+    
+    print(f"📝 Selected {len(selected_examples)}/{len(few_shot_examples)} few-shot examples ({current_example_tokens} tokens)")
+    return selected_examples
+
 
 def make_messages(
         data: List[dict], 
@@ -55,7 +114,8 @@ def make_messages(
         max_keywords: int = 15,
         max_topics: int = 5,
         random_pick_keywords: bool = False,
-        proportional_selection: bool = True
+        proportional_selection: bool = True,
+        num_of_queries: int = 5
     ) -> List[dict]:
     """
     make conversation messages for LLM to generate queries based on the provided documents.
@@ -98,23 +158,52 @@ def make_messages(
                 user_prompt = {"role": "user", "content": USER_PROMPT_TEMPLATE.replace("[DOCUMENT]", text)}
         elif prompt_template == "promptagator":
             prompt = PROMPTAGATOR_SYS_PROMPT
-            for example in few_shot_examples:
+            for example in few_shot_examples[:4]:
                 prompt += f"Article: {example['doc_text']}\n"
                 prompt += f"Query: {example['query_text']}\n\n"
             sys_prompt = {"role": "system", "content": prompt}
             user_prompt = {"role": "user", "content": PROMPTAGATOR_USER_PROMPT.replace("[DOCUMENT]", text)}
+        elif prompt_template == "plan-then-write-given-topics-plan":
+            sys_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/given-toipcs-plan/system.txt")
+            user_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/given-toipcs-plan/user.txt")
+            sys_prompt = {"role": "system", "content": sys_template.replace("<num_of_queries>", str(num_of_queries))}
+            user_prompt = {"role": "user", "content": user_template.replace("<doc_snippet>", text).replace("<topics>", doc.get("formatted_topics", "")).replace("<keywords>", doc.get("formatted_keywords", ""))}
+        elif prompt_template == "plan-then-write-identify-then-plan":
+            sys_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/identify-then-plan/system.txt")
+            user_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/identify-then-plan/user.txt")
+            sys_prompt = {"role": "system", "content": sys_template.replace("<num_of_queries>", str(num_of_queries))}
+            user_prompt = {"role": "user", "content": user_template.replace("<doc_snippet>", text)}
             
         messages.append([sys_prompt, user_prompt])
     return messages
 
-def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: SamplingParams) -> List[str]:
+
+def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: SamplingParams, prompt_template: str, target_queries: int = 50) -> List[str]:
     all_gen_q = []
-    outputs = llm.chat(messages, sampling_params)
-    for output in outputs:
-        gen_q = []
-        for seq in output.outputs:
-            gen_q.append(seq.text.strip())
-        all_gen_q.append(gen_q)
+    
+    if prompt_template == "promptagator":
+        # For single-query methods, run multiple times to reach target
+        queries_per_run = sampling_params.n  # num_return_sequences
+        num_runs = target_queries // queries_per_run
+        
+        for run in range(num_runs):
+            outputs = llm.chat(messages, sampling_params)
+            for i, output in enumerate(outputs):
+                if run == 0:
+                    all_gen_q.append([])
+                for seq in output.outputs:
+                    all_gen_q[i].append(seq.text.strip())
+    else:
+        # For multi-query methods (like D2Q), use existing logic
+        outputs = llm.chat(messages, sampling_params)
+        for output in outputs:
+            for seq in output.outputs:
+                queries = seq.text.strip().split('\n')
+                # Filter out empty strings and strip whitespace
+                queries = [q.strip() for q in queries if q.strip()]
+
+            all_gen_q.append(queries)
+    
     return all_gen_q
 
 
@@ -157,7 +246,8 @@ if __name__ == "__main__":
         max_keywords=args.max_keywords,
         max_topics=args.max_topics,
         random_pick_keywords=args.random_pick_keywords,
-        proportional_selection=args.proportional_selection
+        proportional_selection=args.proportional_selection,
+        num_of_queries=args.num_of_queries
     )
     
     print(f"✅ Created {len(messages)} messages")
@@ -186,7 +276,7 @@ if __name__ == "__main__":
     
     print(f"⚡ Starting query generation...")
     # Generate queries
-    generated_q = generate_queries_vllm(messages, llm, sampling_params)
+    generated_q = generate_queries_vllm(messages, llm, sampling_params, args.prompt_template, args.total_target_queries)
     
     print(f"✅ Generated queries for {len(generated_q)} documents")
 
