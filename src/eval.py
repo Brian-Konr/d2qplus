@@ -70,7 +70,7 @@ def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: 
 
         # Text-only Dense
         idx_text_dense = FlexIndex(idx_td_dir, verbose=True)
-        if overwrite_text_dense_index:
+        if overwrite_text_dense_index or not os.path.exists(idx_td_dir):
             print(f"Building text dense index at {idx_td_dir}")
             text_dense_indexer = idx_text_dense.indexer(mode="overwrite")
             (doc_enc >> text_dense_indexer).index(df[['docno','text']].to_dict('records'))    
@@ -78,7 +78,7 @@ def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: 
         
         # Text+Doc2Query Dense
         idx_aug_dense = FlexIndex(idx_ad_dir, verbose=True)
-        if overwrite_aug_dense_index:
+        if overwrite_aug_dense_index or not os.path.exists(idx_ad_dir):
             print(f"Building augmented dense index at {idx_ad_dir}")
             aug_dense_indexer = idx_aug_dense.indexer(mode="overwrite")
             (doc_enc >> aug_dense_indexer).index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
@@ -131,7 +131,7 @@ def main():
 
     parser.add_argument("--k",         type=int, default=300, help="top-k for retrieval")
     parser.add_argument("--batch-size",type=int, default=64, help="BGE-M3 encoder batch size")
-    parser.add_argument("--max-length",type=int, default=2048, help="BGE-M3 max sequence length")
+    parser.add_argument("--max-length",type=int, default=4096, help="BGE-M3 max sequence length")
     args = parser.parse_args()
 
 
