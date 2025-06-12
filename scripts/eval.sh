@@ -6,16 +6,16 @@ export JVM_PATH="$CONDA_PREFIX/lib/server/libjvm.so"
 
 # Variables for better control
 BASE_DIR="/home/guest/r12922050/GitHub/d2qplus"
-DATASET="nfcorpus"
+DATASET="fiqa-bm25-5000"
 
 # List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "with_topic_llama_1b"
+    "text_only"
 )
-
 # Remember if want to do dense indexing, need to pass --do-dense flag
 
 # Iterate through each query name
+
 for GEN_QUERY_NAME in "${GEN_QUERY_NAMES[@]}"; do
     echo "=========================================="
     echo "Currently running evaluation for: $DATASET - $GEN_QUERY_NAME"

@@ -1,15 +1,17 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 # Path parameters
 DATASET="nfcorpus"
+TOPIC_NAME=0612-01
 CORPUS_PATH="/home/guest/r12922050/GitHub/d2qplus/data/${DATASET}/corpus.jsonl"
-OUTPUT_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/${DATASET}/keywords/0612-window_size_2-step_2_top10.jsonl"
+OUTPUT_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/${DATASET}/topics/${TOPIC_NAME}/keywords.jsonl"
 
-DOC_TOPICS_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/topics/0612-window_size_2-step_2/doc_topics.jsonl"
+DOC_TOPICS_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/${DATASET}/topics/${TOPIC_NAME}/doc_topics.jsonl"
 
 # Model parameters
 EMBEDDING_MODEL="pritamdeka/S-Scibert-snli-multinli-stsb"
-DEVICE="cuda:$CUDA_VISIBLE_DEVICES"
+# EMBEDDING_MODEL="all-mpnet-base-v2"
+DEVICE="cuda"
 
 # Extraction parameters
 TOP_N_CANDIDATES=50

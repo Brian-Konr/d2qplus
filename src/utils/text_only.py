@@ -11,7 +11,12 @@ def main(input_path, output_path):
         doc['id'] = doc.pop('_id')  # rename '_id' to 'id'
         doc['predicted_queries'] = ""
 
+
     # Save corpus to file
+    # if output path doesn't exist, create it
+    import os
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
     with open(output_path, "w") as f:
         for doc in corpus:
             json.dump(doc, f)

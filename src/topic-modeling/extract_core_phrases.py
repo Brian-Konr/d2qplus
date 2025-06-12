@@ -152,6 +152,9 @@ class CorePhraseExtractor:
             total_distinctiveness = 0.0
             total_weight = 0.0
             
+            # # sort by weight to prioritize more relevant topics
+            # doc_topics_list.sort(key=lambda x: x['weight'], reverse=True)
+            
             for topic_info in doc_topics_list:
                 topic_id = topic_info['topic_id']
                 topic_weight = topic_info['weight']

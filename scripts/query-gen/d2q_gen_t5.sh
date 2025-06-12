@@ -1,5 +1,5 @@
 # max_input_length 0 means no limit, default to 512
-export CUDA_VISIBLE_DEVICES=4
+export CUDA_VISIBLE_DEVICES=1
 
 # Generate queries using DocTTTTTQuery
 
@@ -8,7 +8,6 @@ NUM_GENERATED_QUERIES=20
 
 TOTAL_QUERIES=100
 NUM_ITERATIONS=$((TOTAL_QUERIES / NUM_GENERATED_QUERIES))
-NUM_ITERATIONS=5
 
 for i in $(seq 1 $NUM_ITERATIONS); do
     python /home/guest/r12922050/GitHub/d2qplus/src/generate_t5.py \
@@ -17,7 +16,7 @@ for i in $(seq 1 $NUM_ITERATIONS); do
         --max_input_length 512 \
         --max_output_length 64 \
         --top_k 10 \
-        --batch_size 8 \
+        --batch_size 10 \
         --corpus_path "/home/guest/r12922050/GitHub/d2qplus/data/${DATASET}/corpus.jsonl" \
         --save_file "/home/guest/r12922050/GitHub/d2qplus/gen/${DATASET}/t5_${NUM_GENERATED_QUERIES}q_${i}.jsonl"
 done
@@ -30,6 +29,6 @@ for file in /home/guest/r12922050/GitHub/d2qplus/gen/${DATASET}/t5_${NUM_GENERAT
     fi
 done
 
-python /home/guest/r12922050/GitHub/d2qplus/gen/append_multiple_t5_genq.py \
+python /home/guest/r12922050/GitHub/d2qplus/src/utils/append_multiple_t5_genq.py \
     --input_files $INPUT_FILES \
     --output_file "/home/guest/r12922050/GitHub/d2qplus/gen/${DATASET}/t5_${TOTAL_QUERIES}q.jsonl"

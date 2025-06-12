@@ -1,5 +1,5 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=6,7
+export CUDA_VISIBLE_DEVICES=0,1
 
 
 # Job Control - set which jobs to run (space-separated list)
@@ -9,10 +9,10 @@ JOBS_TO_RUN="base_with_topic"
 # Configuration variables
 BASE_PATH="/home/guest/r12922050/GitHub/d2qplus"
 DATASET="nfcorpus"
-TOPIC_DIR="0606-pritamdeka-biobert-pos-keybert-mmr"
+TOPIC_DIR="0612-01"
 
 # Extracted Core Phrases
-CORE_PHRASE_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/keywords/top10.jsonl"
+CORE_PHRASE_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/${DATASET}/topics/${TOPIC_DIR}/keywords.jsonl"
 USE_CORE_PHRASES=1 # 1 for True, 0 for False
 
 MODEL="meta-llama/Llama-3.1-8B-Instruct"
@@ -21,9 +21,9 @@ MODEL_NAME_FOR_SAVE=${MODEL##*/}  # Extract everything after the last '/'
 TRAINED_MODEL="/home/guest/r12922050/GitHub/d2qplus/outputs/Llama-3.2-1B-Instruct-GRPO-separate-reward/checkpoint-1798"
 
 # VLLM Configuration
-TENSOR_PARALLEL_SIZE=1
-GPU_MEMORY_UTILIZATION=0.9
-MAX_MODEL_LEN=4000
+TENSOR_PARALLEL_SIZE=2
+GPU_MEMORY_UTILIZATION=0.8
+MAX_MODEL_LEN=3000
 
 # Sampling Parameters
 TEMPERATURE=0.8
@@ -52,6 +52,9 @@ OUTPUT_NAME="Llama-3.2-1B-Instruct-GRPO-separate-reward"
 # Ensure output directory exists
 mkdir -p "${OUTPUT_DIR}"
 
+# create a unique time stamp for the output file (postfix)
+TIMESTAMP=$(date +"%m%d-%H%M%S")
+
 # Job 1: Trained LLM with topic keywords
 if [[ " $JOBS_TO_RUN " =~ " trained_with_topic " ]]; then
     echo "Starting: Trained LLM with topic keywords generation..."
@@ -59,7 +62,7 @@ if [[ " $JOBS_TO_RUN " =~ " trained_with_topic " ]]; then
         --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
         --corpus_path ${CORPUS_PATH} \
         --corpus_topics_path ${CORPUS_TOPICS_PATH} \
-        --output_path "${OUTPUT_DIR}/${OUTPUT_NAME}.jsonl" \
+        --output_path "${OUTPUT_DIR}/${OUTPUT_NAME}_${TIMESTAMP}.jsonl" \
         --model ${TRAINED_MODEL} \
         --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
         --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
@@ -81,13 +84,12 @@ fi
 if [[ " $JOBS_TO_RUN " =~ " base_with_topic " ]]; then
     echo "Starting: ${MODEL} with topic keywords generation..."
     python3 ${BASE_PATH}/src/generate.py \
-        --test \
         --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
         --corpus_path ${CORPUS_PATH} \
         --core_phrase_path ${CORE_PHRASE_PATH} \
         --use_core_phrases ${USE_CORE_PHRASES} \
         --corpus_topics_path ${CORPUS_TOPICS_PATH} \
-        --output_path "${OUTPUT_DIR}/with_topic_${MODEL_NAME_FOR_SAVE}.jsonl" \
+        --output_path "${OUTPUT_DIR}/with_topic_${TOPIC_DIR}_${MODEL_NAME_FOR_SAVE}_${TIMESTAMP}.jsonl" \
         --model ${MODEL} \
         --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
         --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
@@ -109,11 +111,8 @@ fi
 if [[ " $JOBS_TO_RUN " =~ " base_without_topic " ]]; then
     echo "Starting: ${MODEL} without topic keywords generation..."
     python3 ${BASE_PATH}/src/generate.py \
-        --test \
-        --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
         --corpus_path ${CORPUS_PATH} \
-        --corpus_topics_path ${CORPUS_TOPICS_PATH} \
-        --output_path "${OUTPUT_DIR}/without_topic_${MODEL_NAME_FOR_SAVE}_100q.jsonl" \
+        --output_path "${OUTPUT_DIR}/without_topic_${MODEL_NAME_FOR_SAVE}_${TOTAL_TARGET_QUERIES}q_${TIMESTAMP}.jsonl" \
         --model ${MODEL} \
         --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
         --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
@@ -138,7 +137,7 @@ if [[ " $JOBS_TO_RUN " =~ " plan-then-write-given-topics-plan " ]]; then
         --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
         --corpus_path ${CORPUS_PATH} \
         --corpus_topics_path ${CORPUS_TOPICS_PATH} \
-        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}.jsonl" \
+        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}_${TIMESTAMP}.jsonl" \
         --model ${MODEL} \
         --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
         --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
@@ -162,7 +161,7 @@ if [[ " $JOBS_TO_RUN " =~ " plan-then-write-identify-then-plan " ]]; then
         --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
         --corpus_path ${CORPUS_PATH} \
         --corpus_topics_path ${CORPUS_TOPICS_PATH} \
-        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}.jsonl" \
+        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}_${TIMESTAMP}.jsonl" \
         --model ${MODEL} \
         --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
         --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
@@ -186,7 +185,7 @@ if [[ " $JOBS_TO_RUN " =~ " promptagator " ]]; then
         --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
         --corpus_path ${CORPUS_PATH} \
         --corpus_topics_path ${CORPUS_TOPICS_PATH} \
-        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}_${TOTAL_TARGET_QUERIES}q.jsonl" \
+        --output_path "${OUTPUT_DIR}/${PROMPT_TEMPLATE}_${MODEL_NAME_FOR_SAVE}_${TOTAL_TARGET_QUERIES}q_${TIMESTAMP}.jsonl" \
         --model ${MODEL} \
         --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
         --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
@@ -202,5 +201,36 @@ if [[ " $JOBS_TO_RUN " =~ " promptagator " ]]; then
     echo "Base LLM ${PROMPT_TEMPLATE} completed"
     echo "----------------------------------------"
 fi
+
+
+if [[ " $JOBS_TO_RUN " =~ " d2q-fewshot-topics " ]]; then
+    echo "Starting: ${MODEL} with d2q-fewshot-topics generation..."
+    python3 ${BASE_PATH}/src/generate.py \
+        --few_shot_examples_path /home/guest/r12922050/GitHub/d2qplus/prompts/few_shot_query_set_nfcorpus.jsonl \
+        --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
+        --corpus_path ${CORPUS_PATH} \
+        --core_phrase_path ${CORE_PHRASE_PATH} \
+        --use_core_phrases ${USE_CORE_PHRASES} \
+        --corpus_topics_path ${CORPUS_TOPICS_PATH} \
+        --output_path "${OUTPUT_DIR}/with_topic_${TOPIC_DIR}_${MODEL_NAME_FOR_SAVE}_${TIMESTAMP}.jsonl" \
+        --model ${MODEL} \
+        --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
+        --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
+        --max_model_len ${MAX_MODEL_LEN} \
+        --temperature ${TEMPERATURE} \
+        --max_tokens ${MAX_TOKENS} \
+        --num_of_queries ${NUM_OF_QUERIES_PER_DOC} \
+        --return_sequence_num ${RETURN_SEQUENCE_NUM} \
+        --with_topic_keywords \
+        --with_topic_weights \
+        --prompt_template d2q-fewshot-topics \
+        --max_keywords ${MAX_KEYWORDS} \
+        --max_topics ${MAX_TOPICS}
+    echo "Base LLM with topic keywords generation completed"
+    echo "----------------------------------------"
+fi
+
+
+
 
 echo "All selected jobs completed!"

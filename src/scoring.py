@@ -11,6 +11,8 @@ from typing import List, Dict, Any, Optional
 from collections import Counter
 from sacrebleu import BLEU
 from rank_bm25 import BM25Okapi
+import json
+from sentence_transformers import SentenceTransformer
 
 
 class QueryScorer:
@@ -230,7 +232,6 @@ class QueryFilterScorer:
     def score_queries(
         self,
         queries: List[str],
-        expected_n: Optional[int] = None,
         topic_ids: Optional[List[int]] = None,
         topic_weights: Optional[List[float]] = None,
         keywords: Optional[List[str]] = None,
@@ -258,8 +259,6 @@ class QueryFilterScorer:
         # Default to all components if not specified
         if components is None:
             components = ['diversity', 'keyword_coverage']
-            if expected_n is not None:
-                components.append('format')
             if topic_ids is not None and self.topic_vecs is not None:
                 components.append('topic_coverage')
             if doc_id is not None and self.doc_vectors is not None:
@@ -298,3 +297,23 @@ class QueryFilterScorer:
         
         # Return normalized score
         return total_score / total_weight if total_weight > 0 else 0.0
+
+
+def main():
+    queries_file = "/home/guest/r12922050/GitHub/d2qplus/gen/nfcorpus/with_topic_0612-01_Llama-3.1-8B-Instruct_20250612-202217.jsonl"
+    with open(queries_file, "r", encoding="utf-8") as f:
+        queries = [json.loads(line).get("predicted_queries", []) for line in f if line.strip()]
+
+    # embed_model = SentenceTransformer("allenai/scibert_scivocab_uncased", device="cuda:2")
+    # embs = embed_model.encode(enhanced_topics, convert_to_tensor=True, normalize_embeddings=True)
+    # topic_lookup = {int(tid): emb.cpu() for tid, emb in zip(topic_ids, embs)}
+    print(len(queries))
+    print(queries[0])
+
+
+    """
+    Two Stage: 
+    """
+
+if __name__ == "__main__":
+    main()

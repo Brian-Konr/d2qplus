@@ -3,7 +3,7 @@ from typing import Any, List
 from utils.util import read_jsonl, read_txt
 from utils.data import combine_topic_info
 from pydantic import BaseModel, Field
-from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC, D2Q_SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, PROMPTAGATOR_SYS_PROMPT, PROMPTAGATOR_USER_PROMPT
+from utils.constants import D2Q_SYS_PROMPT_WITH_TOPIC, D2Q_SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, PROMPTAGATOR_SYS_PROMPT, PROMPTAGATOR_USER_PROMPT, D2Q_FEW_SHOT_SYS_PROMPT_WITH_TOPIC
 from vllm import LLM, SamplingParams
 import argparse
 
@@ -132,8 +132,21 @@ def make_messages(
         
         sys_prompt = {}
         user_prompt = {}
+
         if prompt_template == "d2q":
             sys_prompt = {"role": "system", "content": D2Q_SYS_PROMPT_WITH_TOPIC if with_topic_keywords else D2Q_SYSTEM_PROMPT}
+            if with_topic_keywords:
+                user_prompt = {"role": "user", "content": doc['prompt']}
+            else:
+                # Basic template without topic information
+                user_prompt = {"role": "user", "content": USER_PROMPT_TEMPLATE}
+        elif prompt_template == "d2q-fewshot-topics":
+            
+            prompt = D2Q_FEW_SHOT_SYS_PROMPT_WITH_TOPIC
+            for example in few_shot_examples:
+                prompt += f"Article: {example['doc_text']}\n\n"
+                prompt += f"Query Set: {example['query_text']}\n\n"
+            sys_prompt = {"role": "system", "content": prompt}
             if with_topic_keywords:
                 user_prompt = {"role": "user", "content": doc['prompt']}
             else:
@@ -197,18 +210,28 @@ def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: Sampl
 if __name__ == "__main__":
     args = parse_args()
     output_path = args.output_path
+
+    #construct output directory if it does not exist
+    import os
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     print(f"🔄 Loading corpus data...")
     print(f"  - Enhanced topic info: {args.enhanced_topic_info_pkl}")
     print(f"  - Corpus topics: {args.corpus_topics_path}")
     print(f"  - Corpus: {args.corpus_path}")
     
-    corpus = combine_topic_info(
-        enhanced_topic_info_pkl=args.enhanced_topic_info_pkl, 
-        corpus_topics_path=args.corpus_topics_path, 
-        corpus_path=args.corpus_path,
-        core_phrase_path=args.core_phrase_path
-    )
+    corpus = read_jsonl(args.corpus_path)
+    # replace original _id in corpus with doc_id
+    for doc in corpus:
+        doc["doc_id"] = doc.pop("_id", None)
+
+    if args.with_topic_keywords:
+        corpus = combine_topic_info(
+            enhanced_topic_info_pkl=args.enhanced_topic_info_pkl, 
+            corpus_topics_path=args.corpus_topics_path, 
+            corpus_path=args.corpus_path,
+            core_phrase_path=args.core_phrase_path
+        )
     
     print(f"✅ Loaded {len(corpus)} documents")
     print(f"📋 Generation settings:")

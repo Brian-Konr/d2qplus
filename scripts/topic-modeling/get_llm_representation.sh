@@ -1,7 +1,7 @@
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
-DATASET="CSFCube-1.1"
-TOPIC_MODELING_NAME="0609-pritamdeka_scibert-biobert-pos-keybert-mmr"
+DATASET="nfcorpus"
+TOPIC_MODELING_NAME="0612-01"
 TOPIC_INFO_BASE_DIR="/home/guest/r12922050/GitHub/d2qplus/augmented-data/${DATASET}/topics/${TOPIC_MODELING_NAME}"
 
 python3 /home/guest/r12922050/GitHub/d2qplus/src/utils/get_llm_representation.py \
