@@ -12,6 +12,10 @@ def parse_args():
     parser.add_argument("--enhanced_topic_info_pkl", type=str, help="Path to the enhanced topic info pickle file")
     parser.add_argument("--corpus_path", type=str, help="Path to the corpus.jsonl file")
     parser.add_argument("--corpus_topics_path", type=str, help="Path to the corpus topics JSONL file")
+    
+    parser.add_argument("--core_phrase_path", type=str, default=None, help="Path to the core phrases JSONL file (optional)")
+    parser.add_argument("--use_core_phrases", type=int, default=0, help="Use extracted core phrases for dynamic prompt generation")
+    
     parser.add_argument("--output_path", type=str, help="Path to save the generated queries")
 
     # test
@@ -85,7 +89,8 @@ def make_messages(
         num_of_queries: int = 5,
         # Document truncation parameters
         tokenizer = None,
-        max_doc_tokens: int = 1024
+        max_doc_tokens: int = 1024,
+        use_extracted_core_phrases: bool = False,
     ) -> List[dict]:
     """
     make conversation messages for LLM to generate queries based on the provided documents.
@@ -94,6 +99,8 @@ def make_messages(
     `with_topic_weights`: if True, the user prompt will include topic weights information. This is only used for D2Q prompt template.
     `prompt_template`: the template to use for generating queries ("d2q" or "promptagator")
     `max_keywords`, `max_topics`, etc.: Parameters for dynamic prompt generation when 'prompt' field is not available
+
+    `use_extracted_core_phrases`: if True, use extracted core phrases for dynamic prompt generation (data should contain 'core_phrases' field)
     
     `data`: The data is expected to be a list of dictionaries, where each dictionary contains:
     - text: the document text
@@ -114,6 +121,7 @@ def make_messages(
             random_pick_keywords=random_pick_keywords,
             proportional_selection=proportional_selection,
             with_topic_weights=with_topic_weights,
+            use_extracted_core_phrases=use_extracted_core_phrases,
         )
     for doc in data:
         text = doc['text']
@@ -130,14 +138,14 @@ def make_messages(
                 user_prompt = {"role": "user", "content": doc['prompt']}
             else:
                 # Basic template without topic information
-                user_prompt = {"role": "user", "content": USER_PROMPT_TEMPLATE.replace("[DOCUMENT]", text)}
+                user_prompt = {"role": "user", "content": USER_PROMPT_TEMPLATE}
         elif prompt_template == "promptagator":
             prompt = PROMPTAGATOR_SYS_PROMPT
-            for example in few_shot_examples[:5]:
+            for example in few_shot_examples:
                 prompt += f"Article: {example['doc_text']}\n"
                 prompt += f"Query: {example['query_text']}\n\n"
             sys_prompt = {"role": "system", "content": prompt}
-            user_prompt = {"role": "user", "content": PROMPTAGATOR_USER_PROMPT.replace("[DOCUMENT]", text)}
+            user_prompt = {"role": "user", "content": PROMPTAGATOR_USER_PROMPT}
         elif prompt_template == "plan-then-write-given-topics-plan":
             sys_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/given-toipcs-plan/system.txt")
             user_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/given-toipcs-plan/user.txt")
@@ -146,9 +154,13 @@ def make_messages(
         elif prompt_template == "plan-then-write-identify-then-plan":
             sys_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/identify-then-plan/system.txt")
             user_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/identify-then-plan/user.txt")
-            sys_prompt = {"role": "system", "content": sys_template.replace("<num_of_queries>", str(num_of_queries))}
+            sys_prompt = {"role": "system", "content": sys_template}
             user_prompt = {"role": "user", "content": user_template.replace("<doc_snippet>", text)}
-            
+        
+        # replace num_of_queries placeholder in user prompt
+        sys_prompt['content'] = sys_prompt['content'].replace("<num_of_queries>", str(num_of_queries))
+        user_prompt['content'] = user_prompt['content'].replace("<num_of_queries>", str(num_of_queries)).replace("[DOCUMENT]", text)
+
         messages.append([sys_prompt, user_prompt])
     return messages
 
@@ -194,7 +206,8 @@ if __name__ == "__main__":
     corpus = combine_topic_info(
         enhanced_topic_info_pkl=args.enhanced_topic_info_pkl, 
         corpus_topics_path=args.corpus_topics_path, 
-        corpus_path=args.corpus_path
+        corpus_path=args.corpus_path,
+        core_phrase_path=args.core_phrase_path
     )
     
     print(f"✅ Loaded {len(corpus)} documents")
@@ -232,7 +245,8 @@ if __name__ == "__main__":
         proportional_selection=args.proportional_selection,
         num_of_queries=args.num_of_queries,
         tokenizer=tokenizer,
-        max_doc_tokens=args.max_doc_tokens
+        max_doc_tokens=args.max_doc_tokens,
+        use_extracted_core_phrases=True if args.use_core_phrases == 1 else False
     )
     
     print(f"✅ Created {len(messages)} messages")

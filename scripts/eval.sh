@@ -6,11 +6,11 @@ export JVM_PATH="$CONDA_PREFIX/lib/server/libjvm.so"
 
 # Variables for better control
 BASE_DIR="/home/guest/r12922050/GitHub/d2qplus"
-DATASET="CSFCube-1.1"
+DATASET="nfcorpus"
 
 # List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "text_add_phrase_mining_keywords"
+    "with_topic_llama_1b"
 )
 
 # Remember if want to do dense indexing, need to pass --do-dense flag

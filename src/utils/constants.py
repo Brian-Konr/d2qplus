@@ -1,51 +1,47 @@
 # system prompt
 import os
 
-FIXED_NUMBER_OF_QUERIES = 5
+# Placeholder for the number of queries (to be replaced dynamically)
 
 TOPIC_REPRESENTATION_SYSTEM_PROMPT = "You are an AI assistant that specializes in precise data extraction and strictly adheres to output formatting instructions. Your goal is to generate only the requested output format without any additional text."
 
-D2Q_SYSTEM_PROMPT = f"""You are a query‐generation assistant. For each document you receive, Your task is to generate exactly {FIXED_NUMBER_OF_QUERIES} distinct questions based on the provided document.
+D2Q_SYSTEM_PROMPT = """You are a query‐generation assistant. For each document you receive, Your task is to generate exactly <num_of_queries> distinct questions based on the provided document.
 Your output MUST adhere to the following format STRICTLY:
 
 Rules:
-- Exactly {FIXED_NUMBER_OF_QUERIES} questions.
-- Each question on a new line.
 - NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
 - NO numbering (e.g., "1.", "2.").
 - NO bullet points or other list markers (e.g., "-", "*").
-- Your entire response must consist ONLY of the {FIXED_NUMBER_OF_QUERIES} questions, each separated by a newline character.**
+- Your entire response must consist ONLY of the <num_of_queries> questions, each separated by a newline character.**
 """
 
-D2Q_SYS_PROMPT_WITH_TOPIC = f"""You are a query‐generation assistant. For each document you receive, Your task is to generate exactly {FIXED_NUMBER_OF_QUERIES} distinct questions based on the provided document, topics, and keywords.
+D2Q_SYS_PROMPT_WITH_TOPIC = """You are a query‐generation assistant. For each document you receive, Your task is to generate exactly <num_of_queries> distinct questions based on the provided document, topics, and keywords.
 Your output MUST adhere to the following format STRICTLY:
 
 Rules:
-- Exactly {FIXED_NUMBER_OF_QUERIES} questions.
-- Each question on a new line.
 - NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
 - NO numbering (e.g., "1.", "2.").
 - NO bullet points or other list markers (e.g., "-", "*").
-- Your entire response must consist ONLY of the {FIXED_NUMBER_OF_QUERIES} questions, each separated by a newline character.**
+- Your entire response must consist ONLY of the <num_of_queries> questions, each separated by a newline character.**
 
 When generating the queries, document content, topics and keywords information should all be considered:
 
-- **Implicitly cover** the document’s topics:
-   - You may express topics via synonyms, broader phrases, or context (e.g., topic “survival analysis” → “risk estimation over time”).
+- **Implicitly cover** the document's topics:
+   - You may express topics via synonyms, broader phrases, or context (e.g., topic "survival analysis" → "risk estimation over time").
 
-- **Explicitly include** the document’s keywords
-   - Embed them naturally (e.g., “breast cancer death” can appear as is).
+- **Explicitly include** the document's keywords
+   - Embed them naturally (e.g., "breast cancer death" can appear as is).
 """
 
 
 # - User prompts -
-USER_PROMPT_TEMPLATE = f"""Read the following document and generate {FIXED_NUMBER_OF_QUERIES} relevant queries for this document.
+USER_PROMPT_TEMPLATE = """Read the following document and generate <num_of_queries> relevant queries for this document.
 
 Document:
 [DOCUMENT]
 """
 
-USER_PROMPT_TOPIC_WITHOUT_WEIGHT_TEMPLATE = f"""Here is an example document with keywords and topics. Generate {FIXED_NUMBER_OF_QUERIES} relevant queries for this document:
+USER_PROMPT_TOPIC_WITHOUT_WEIGHT_TEMPLATE = """Here is an example document with keywords and topics. Generate <num_of_queries> relevant queries for this document:
 
 Document:
 [DOCUMENT]
@@ -57,7 +53,7 @@ Topics:
 [TOPICS]
 """
 
-USER_PROMPT_TOPIC_WITH_WEIGHT_TEMPLATE = f"""Here is an example document with keywords and weighted topics. Generate {FIXED_NUMBER_OF_QUERIES} relevant queries for this document where high-weight topics should steer more of your queries’ framing.
+USER_PROMPT_TOPIC_WITH_WEIGHT_TEMPLATE = """Here is an example document with keywords and weighted topics. Generate <num_of_queries> relevant queries for this document where high-weight topics should steer more of your queries' framing.
 
 Document:
 [DOCUMENT]
