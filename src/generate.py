@@ -196,13 +196,13 @@ def generate_queries_vllm(messages: List[dict], llm: LLM, sampling_params: Sampl
     else:
         # For multi-query methods (like D2Q), use existing logic
         outputs = llm.chat(messages, sampling_params)
-        for output in outputs:
+        for i, output in enumerate(outputs):
+            all_gen_q.append([])  # Initialize list for each document
             for seq in output.outputs:
                 queries = seq.text.strip().split('\n')
                 # Filter out empty strings and strip whitespace
                 queries = [q.strip() for q in queries if q.strip()]
-
-            all_gen_q.append(queries)
+                all_gen_q[i].append(queries)
     
     return all_gen_q
 

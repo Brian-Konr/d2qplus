@@ -6,11 +6,11 @@ export JVM_PATH="$CONDA_PREFIX/lib/server/libjvm.so"
 
 # Variables for better control
 BASE_DIR="/home/guest/r12922050/GitHub/d2qplus"
-DATASET="fiqa-bm25-5000"
+DATASET="nfcorpus" # "fiqa-bm25-5000"
 
 # List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "text_only"
+    "with_topic_Llama-3.1-8B-Instruct_0612-topic-size-10"
 )
 # Remember if want to do dense indexing, need to pass --do-dense flag
 

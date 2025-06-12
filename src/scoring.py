@@ -13,6 +13,7 @@ from sacrebleu import BLEU
 from rank_bm25 import BM25Okapi
 import json
 from sentence_transformers import SentenceTransformer
+from utils.data import combine_topic_info
 
 
 class QueryScorer:
@@ -157,7 +158,14 @@ class QueryScorer:
         return score / idf_sum
     
     @staticmethod
-    def relevance_score(queries: List[str], doc_id: str, doc_vectors: Dict[str, torch.Tensor], embed_model) -> float:
+    def relevance_score(
+        queries: List[str], 
+        doc_id: str, 
+        doc_vectors: Dict[str, torch.Tensor], 
+        embed_model,
+        aggregate: str = "max", # 'mean' | 'max' | 'topk'
+        topk: int = 3
+    ) -> float:
         """
         Compute relevance score between queries and document.
         
@@ -166,6 +174,8 @@ class QueryScorer:
             doc_id: Document ID
             doc_vectors: Dictionary mapping doc_id to document vectors
             embed_model: Embedding model
+            aggregate: Aggregation method for similarity ('mean', 'max', 'topk')  
+            topk is used to control how many top similarities to consider
             
         Returns:
             Average similarity between queries and document
@@ -185,135 +195,58 @@ class QueryScorer:
         try:
             doc_emb = doc_vectors[doc_id].to(device)
             sims = q_embs @ doc_emb
-            avg_sim = sims.mean().item() if sims.numel() > 0 else 0.0
-            return avg_sim
+
+            if aggregate == "mean":
+                return sims.mean().item()
+            elif aggregate == "max":
+                return sims.max().item()
+            elif aggregate == "topk":
+                k = min(topk, len(sims))
+                return sims.topk(k).values.mean().item()
         except (ValueError, KeyError):
             return 0.0
 
-
-class QueryFilterScorer:
-    """
-    High-level scorer that combines multiple scoring functions for filtering.
-    """
-    
-    def __init__(
-        self,
-        embed_model,
-        topic_vecs: Optional[torch.Tensor] = None,
-        doc_vectors: Optional[Dict[str, torch.Tensor]] = None,
-        bm25: Optional[BM25Okapi] = None,
-        weights: Optional[Dict[str, float]] = None
-    ):
+    def consistency_pass(queries, doc_id):
         """
-        Initialize the scorer with models and weights.
-        
-        Args:
-            embed_model: Embedding model
-            topic_vecs: Topic vectors tensor
-            doc_vectors: Document vectors dictionary
-            bm25: BM25 model for keyword scoring
-            weights: Weights for different scoring components
+        考慮 round-trip consistency (BM25 能不能用這個 query 找到 doc_id)
+        要先建好 QG expanded corpus 的 BM25
         """
-        self.embed_model = embed_model
-        self.topic_vecs = topic_vecs
-        self.doc_vectors = doc_vectors
-        self.bm25 = bm25
-        
-        # Default weights
-        default_weights = {
-            'format': 0.1,
-            'diversity': 0.2,
-            'topic_coverage': 0.4,
-            'keyword_coverage': 0.4,
-            'relevance': 0.3
-        }
-        self.weights = weights or default_weights
-    
-    def score_queries(
-        self,
-        queries: List[str],
-        topic_ids: Optional[List[int]] = None,
-        topic_weights: Optional[List[float]] = None,
-        keywords: Optional[List[str]] = None,
-        doc_id: Optional[str] = None,
-        components: Optional[List[str]] = None
-    ) -> float:
-        """
-        Compute overall score for a set of queries.
-        
-        Args:
-            queries: List of query strings
-            expected_n: Expected number of queries (for format check)
-            topic_ids: Topic IDs for coverage calculation
-            topic_weights: Topic weights for coverage calculation
-            keywords: Keywords for coverage calculation
-            doc_id: Document ID for relevance calculation
-            components: List of components to include in scoring
-            
-        Returns:
-            Weighted overall score
-        """
-        if not queries:
-            return 0.0
-            
-        # Default to all components if not specified
-        if components is None:
-            components = ['diversity', 'keyword_coverage']
-            if topic_ids is not None and self.topic_vecs is not None:
-                components.append('topic_coverage')
-            if doc_id is not None and self.doc_vectors is not None:
-                components.append('relevance')
-        
-        total_score = 0.0
-        total_weight = 0.0
-        
-        # Topic coverage score
-        if 'topic_coverage' in components and topic_ids and self.topic_vecs is not None:
-            if topic_weights is None:
-                topic_weights = [1.0] * len(topic_ids)
-            score = QueryScorer.topic_coverage_score(
-                queries, topic_ids, topic_weights, self.topic_vecs, self.embed_model
-            )
-            weight = self.weights.get('topic_coverage', 0.4)
-            total_score += score * weight
-            total_weight += weight
-        
-        # Keyword coverage score
-        if 'keyword_coverage' in components and keywords:
-            if self.bm25 is not None:
-                score = QueryScorer.bm25_keyword_coverage_score(queries, keywords, self.bm25)
-            else:
-                score = QueryScorer.jaccard_keyword_coverage_score(queries, keywords)
-            weight = self.weights.get('keyword_coverage', 0.4)
-            total_score += score * weight
-            total_weight += weight
-        
-        # Relevance score
-        if 'relevance' in components and doc_id and self.doc_vectors is not None:
-            score = QueryScorer.relevance_score(queries, doc_id, self.doc_vectors, self.embed_model)
-            weight = self.weights.get('relevance', 0.3)
-            total_score += score * weight
-            total_weight += weight
-        
-        # Return normalized score
-        return total_score / total_weight if total_weight > 0 else 0.0
+        raise NotImplementedError("Consistency pass scoring not implemented yet.")
 
 
 def main():
+    topic_dir = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/topics/0612-01"
+    enhanced_topic_info_path = f"{topic_dir}/topic_info_dataframe_enhanced.pkl"
+    doc_topics_path = f"{topic_dir}/doc_topics.jsonl"
+    core_phrases_path = f"{topic_dir}/keywords.jsonl"
+    corpus_path = "/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus.jsonl"
+
+    enhanced_corpus = combine_topic_info(enhanced_topic_info_path, doc_topics_path, corpus_path, core_phrases_path)
+    
+    import pandas as pd
+    enhanced_topics = pd.read_pickle(enhanced_topic_info_path)
+    topic_ids = enhanced_topics["Topic"].tolist()
+    enhanced_topics = enhanced_topics["Enhanced_Topic"].tolist() # natural language topic label for each topic
+
+    embed_model = SentenceTransformer("pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb", device="cuda")
+    embs = embed_model.encode(enhanced_topics, convert_to_tensor=True, normalize_embeddings=True)
+    topic_lookup = {int(tid): emb.cpu() for tid, emb in zip(topic_ids, embs)}
+
     queries_file = "/home/guest/r12922050/GitHub/d2qplus/gen/nfcorpus/with_topic_0612-01_Llama-3.1-8B-Instruct_20250612-202217.jsonl"
     with open(queries_file, "r", encoding="utf-8") as f:
-        queries = [json.loads(line).get("predicted_queries", []) for line in f if line.strip()]
-
-    # embed_model = SentenceTransformer("allenai/scibert_scivocab_uncased", device="cuda:2")
-    # embs = embed_model.encode(enhanced_topics, convert_to_tensor=True, normalize_embeddings=True)
-    # topic_lookup = {int(tid): emb.cpu() for tid, emb in zip(topic_ids, embs)}
+        queries = [json.loads(line).get("predicted_queries", [[]]) for line in f if line.strip()]
+    
     print(len(queries))
     print(queries[0])
 
-
     """
     Two Stage: 
+    1. set-level query filtering (對一個 query set 評分，並保留 top K% 的 query set)
+    2. query-level: greedy select B queries from the query sets obtained from stage 1 
     """
+
+    ### First Stage: Set-level Query Filtering
+    
 
 if __name__ == "__main__":
     main()
