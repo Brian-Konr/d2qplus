@@ -159,6 +159,14 @@ def make_messages(
                 prompt += f"Query: {example['query_text']}\n\n"
             sys_prompt = {"role": "system", "content": prompt}
             user_prompt = {"role": "user", "content": PROMPTAGATOR_USER_PROMPT}
+        elif prompt_template == "promptagator-topic":
+            # TODOs: 用 promptagator-topic 的 prompt template
+            prompt = PROMPTAGATOR_SYS_PROMPT
+            for example in few_shot_examples:
+                prompt += f"Article: {example['doc_text']}\n"
+                prompt += f"Query: {example['query_text']}\n\n"
+            sys_prompt = {"role": "system", "content": prompt}
+            user_prompt = {"role": "user", "content": PROMPTAGATOR_USER_PROMPT.replace("[KEYWORDS]", "keyword")}
         elif prompt_template == "plan-then-write-given-topics-plan":
             sys_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/given-toipcs-plan/system.txt")
             user_template = read_txt("/home/guest/r12922050/GitHub/d2qplus/prompts/plan-then-write/given-toipcs-plan/user.txt")

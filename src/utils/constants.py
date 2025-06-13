@@ -102,3 +102,16 @@ Rules:
 - NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
 - Exactly 1 query
 """
+
+PROMPTAGATOR_USER_KEYWORD_PROMPT = """Here is an article.
+Article: [DOCUMENT]
+
+Generate a relevant query for this article based on the following keywords:
+[TOPICS] ??
+[TOPIC_WEIGHTS] ??
+[KEYWORDS] ?? (core phrase / topic-level)
+----
+Rules:
+- NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
+- Exactly 1 query
+""" # CCQGen prompting setting
