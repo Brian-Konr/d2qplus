@@ -103,15 +103,21 @@ Rules:
 - Exactly 1 query
 """
 
-PROMPTAGATOR_USER_KEYWORD_PROMPT = """Here is an article.
+
+PROMPTAGATOR_SET_GEN_SYS_PROMPT = """You are a query generation assistant. Your task is to generate <num_of_queries> diverse queries based on the provided article.
+
+The following are some examples:
+
+"""
+
+PROMPTAGATOR_SET_GEN_USER_PROMPT = """Here is an article:
 Article: [DOCUMENT]
 
-Generate a relevant query for this article based on the following keywords:
-[TOPICS] ??
-[TOPIC_WEIGHTS] ??
-[KEYWORDS] ?? (core phrase / topic-level)
+Generate <num_of_queries> relevant queries for this article based on the following keywords:
+[KEYWORDS]
+
 ----
 Rules:
 - NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
-- Exactly 1 query
-""" # CCQGen prompting setting
+- Exactly <num_of_queries> queries, each separated by a newline character.
+"""

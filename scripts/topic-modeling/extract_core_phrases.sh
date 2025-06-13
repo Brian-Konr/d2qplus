@@ -27,6 +27,7 @@ DIVERSITY=0.6
 python /home/guest/r12922050/GitHub/d2qplus/src/topic-modeling/extract_core_phrases.py \
     --corpus_path "$CORPUS_PATH" \
     --doc_topics_path "$DOC_TOPICS_PATH" \
+    --candidate_keywords_path /home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/keywords/candidate_keywords_scibert.pkl \
     --output_path "$OUTPUT_PATH" \
     --embedding_model "$EMBEDDING_MODEL" \
     --device "$DEVICE" \

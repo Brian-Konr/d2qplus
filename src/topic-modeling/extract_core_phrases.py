@@ -25,7 +25,9 @@ class CorePhraseExtractor:
                            max_phrases_per_doc=8,
                            keyphrase_ngram_range=(1, 3),
                            use_mmr=True,
-                           diversity=0.7):
+                           diversity=0.7,
+                           candidate_keywords_path=None
+                           ):
         """
         Extract core phrases for each document using the CCQGen distinctiveness score.
         
@@ -41,6 +43,9 @@ class CorePhraseExtractor:
             diversity: Diversity parameter for MMR (higher = more diverse)
         """
         
+        if candidate_keywords_path:
+            import pandas as pd
+            cand_keywords = pd.read_pickle(candidate_keywords_path)
         # Create document lookup
         doc_lookup = {doc['_id']: doc for doc in corpus}
         topic_assignment = {item['doc_id']: item['topics'] for item in doc_topics}
@@ -67,16 +72,20 @@ class CorePhraseExtractor:
             doc_text = doc_lookup[doc_id]['text']
             
             # Extract candidate phrases with improved KeyBERT parameters
-            candidate_phrases = self.kw_model.extract_keywords(
-                doc_text,
-                keyphrase_ngram_range=keyphrase_ngram_range,
-                stop_words='english',
-                top_n=top_n_candidates,
-                use_mmr=use_mmr,
-                diversity=diversity,  # Higher diversity to avoid redundant phrases
-                use_maxsum=False,     # MMR is generally better than MaxSum
-                nr_candidates=top_n_candidates * 2  # More candidates for MMR to choose from
-            )
+            candidate_phrases = []
+            if candidate_keywords_path:
+                candidate_phrases = cand_keywords[doc_id]
+            else:
+                candidate_phrases = self.kw_model.extract_keywords(
+                    doc_text,
+                    keyphrase_ngram_range=keyphrase_ngram_range,
+                    stop_words='english',
+                    top_n=top_n_candidates,
+                    use_mmr=use_mmr,
+                    diversity=diversity,  # Higher diversity to avoid redundant phrases
+                    use_maxsum=False,     # MMR is generally better than MaxSum
+                    nr_candidates=top_n_candidates * 2  # More candidates for MMR to choose from
+                )
             
             if not candidate_phrases:
                 doc_core_phrases[doc_id] = []
@@ -232,7 +241,8 @@ def run_core_phrase_extraction(args):
         max_phrases_per_doc=args.max_phrases,
         keyphrase_ngram_range=(args.min_ngram, args.max_ngram),
         use_mmr=args.use_mmr,
-        diversity=args.diversity
+        diversity=args.diversity,
+        candidate_keywords_path=args.candidate_keywords_path
     )
     
     # Save results
@@ -267,6 +277,9 @@ def parse_arguments():
     parser.add_argument('--output_path', type=str, 
                         default="/home/guest/r12922050/GitHub/d2qplus/augmented-data/CSFCube-1.1/keywords/core_phrases_ccqgen.jsonl",
                         help='Path to save the extracted core phrases (JSONL format)')
+    parser.add_argument('--candidate_keywords_path', type=str,
+                        default=None,
+                        help='Path to precomputed candidate keywords (optional, for faster extraction)')
     
     # Model parameters
     parser.add_argument('--embedding_model', type=str, 

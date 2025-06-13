@@ -140,18 +140,6 @@ def make_messages(
             else:
                 # Basic template without topic information
                 user_prompt = {"role": "user", "content": USER_PROMPT_TEMPLATE}
-        elif prompt_template == "d2q-fewshot-topics":
-            
-            prompt = D2Q_FEW_SHOT_SYS_PROMPT_WITH_TOPIC
-            for example in few_shot_examples:
-                prompt += f"Article: {example['doc_text']}\n\n"
-                prompt += f"Query Set: {example['query_text']}\n\n"
-            sys_prompt = {"role": "system", "content": prompt}
-            if with_topic_keywords:
-                user_prompt = {"role": "user", "content": doc['prompt']}
-            else:
-                # Basic template without topic information
-                user_prompt = {"role": "user", "content": USER_PROMPT_TEMPLATE}
         elif prompt_template == "promptagator":
             prompt = PROMPTAGATOR_SYS_PROMPT
             for example in few_shot_examples:

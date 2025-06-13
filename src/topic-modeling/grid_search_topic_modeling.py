@@ -8,6 +8,7 @@ Outputs a JSONL file mapping each doc_id to its topic distribution.
 """
 
 import argparse, json, collections, random, os, sys
+import itertools
 import nltk; nltk.download("punkt", quiet=True)
 from nltk import sent_tokenize
 from bertopic import BERTopic
@@ -52,6 +53,9 @@ def run_topic_modeling(
     win_step, 
     embed_model, 
     embed_device, 
+    n_neighbors,
+    n_components,
+    min_topic_size,
     args # Additional BERTopic parameters
 ):
     """
@@ -99,34 +103,23 @@ def run_topic_modeling(
         [{'POS': 'PROPN'}]                    # proper noun  e.g. "CRISPR"
     ]
 
-    pos = PartOfSpeech("en_core_sci_sm", pos_patterns=pos_patterns, top_n_words=250)
     keybert = KeyBERTInspired(nr_candidate_words=100, nr_repr_docs=5, top_n_words=25)
+    pos = PartOfSpeech("en_core_sci_sm", pos_patterns=pos_patterns, top_n_words=200)
     mmr = MaximalMarginalRelevance(diversity=0.6, top_n_words=args.top_n_words)
 
     representation_chain = [pos, keybert, mmr]
 
-    vectorizer = CountVectorizer(stop_words="english", ngram_range=args.n_gram_range, min_df=5)
-
-    # Initialize BERTopic
+    # Initialize BERTopic with grid search parameters
     topic_model = BERTopic(
         embedding_model=embedder,
-        umap_model=UMAP(n_components=5, metric="cosine"),
-        min_topic_size=args.min_topic_size,
-        vectorizer_model=vectorizer,
+        umap_model=UMAP(n_neighbors=n_neighbors, n_components=n_components),
+        min_topic_size=min_topic_size,
         representation_model=representation_chain,
         verbose=True
     )
 
     # Fit and transform
     topics, probs = topic_model.fit_transform(chunks)
-
-    if args.reduce_outliers:
-        # Reduce outliers if specified
-        print("Reducing outliers...")
-        topics = topic_model.reduce_outliers(chunks, topics, probabilities=probs, strategy="probabilities")
-        topic_model.update_topics(chunks, topics=topics)
-
-    # Aggregate per document and write output
 
     os.makedirs(os.path.dirname(corpus_topics_out_path) or ".", exist_ok=True)
     with open(corpus_topics_out_path, "w", encoding="utf-8") as fout:
@@ -135,7 +128,7 @@ def run_topic_modeling(
             total = sum(freq.values())
             topic_entries = []
             for tid, cnt in freq.items():
-                topic_entries.append({"topic_id": int(tid), "weight": round(cnt / total, 6)})
+                topic_entries.append({"topic_id": int(tid), "weight": round(cnt / total, 4)})
             fout.write(json.dumps({"doc_id": doc_id, "topics": topic_entries}, ensure_ascii=False) + "\n")
 
     print(f"Wrote document-topic distributions to '{corpus_topics_out_path}'")
@@ -168,8 +161,128 @@ def run_topic_modeling(
     return topic_model
 
 
+def run_grid_search(
+    corpus_path,
+    base_output_dir,
+    chunk_mode,
+    win_size,
+    win_step,
+    embed_model,
+    embed_device,
+    n_neighbors_list,
+    n_components_list,
+    min_topic_size_list,
+    args
+):
+    """
+    Run grid search over UMAP and BERTopic parameters.
+    """
+    print(f"Starting grid search with:")
+    print(f"  n_neighbors: {n_neighbors_list}")
+    print(f"  n_components: {n_components_list}")
+    print(f"  min_topic_size: {min_topic_size_list}")
+    print(f"  Total combinations: {len(n_neighbors_list) * len(n_components_list) * len(min_topic_size_list)}")
+    
+    results = []
+    
+    for i, (n_neighbors, n_components, min_topic_size) in enumerate(
+        itertools.product(n_neighbors_list, n_components_list, min_topic_size_list)
+    ):
+        print(f"\n{'='*60}")
+        print(f"Running configuration {i+1}: n_neighbors={n_neighbors}, n_components={n_components}, min_topic_size={min_topic_size}")
+        print(f"{'='*60}")
+        
+        # Create output directory for this configuration
+        config_dir = f"neighbors_{n_neighbors}_components_{n_components}_mintopic_{min_topic_size}"
+        output_dir = os.path.join(base_output_dir, config_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        try:
+            # Run topic modeling for this configuration
+            topic_model = run_topic_modeling(
+                corpus_path=corpus_path,
+                base_output_dir=output_dir,
+                chunk_mode=chunk_mode,
+                win_size=win_size,
+                win_step=win_step,
+                embed_model=embed_model,
+                embed_device=embed_device,
+                n_neighbors=n_neighbors,
+                n_components=n_components,
+                min_topic_size=min_topic_size,
+                args=args
+            )
+            
+            # Save configuration parameters
+            config_params = {
+                "n_neighbors": n_neighbors,
+                "n_components": n_components,
+                "min_topic_size": min_topic_size,
+                "chunk_mode": chunk_mode,
+                "win_size": win_size,
+                "win_step": win_step,
+                "embed_model": embed_model,
+                "embed_device": embed_device,
+                "top_n_words": args.top_n_words,
+                "save_topic_model": args.save_topic_model
+            }
+            
+            config_path = os.path.join(output_dir, "grid_search_config.json")
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config_params, f, indent=2, ensure_ascii=False)
+            
+            # Get topic model metrics
+            topic_info = topic_model.get_topic_info()
+            num_topics = len(topic_info) - 1  # Exclude outlier topic (-1)
+            
+            result = {
+                "config_dir": config_dir,
+                "n_neighbors": n_neighbors,
+                "n_components": n_components,
+                "min_topic_size": min_topic_size,
+                "num_topics": num_topics,
+                "status": "success"
+            }
+            results.append(result)
+            
+            print(f"✅ SUCCESS: Generated {num_topics} topics")
+            print(f"   Output directory: {output_dir}")
+            
+        except Exception as e:
+            print(f"❌ FAILED: {str(e)}")
+            result = {
+                "config_dir": config_dir,
+                "n_neighbors": n_neighbors,
+                "n_components": n_components,
+                "min_topic_size": min_topic_size,
+                "num_topics": 0,
+                "status": "failed",
+                "error": str(e)
+            }
+            results.append(result)
+    
+    # Save grid search summary
+    summary_path = os.path.join(base_output_dir, "grid_search_summary.json")
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
+    
+    print(f"\n{'='*60}")
+    print(f"Grid search completed! Summary saved to: {summary_path}")
+    print(f"{'='*60}")
+    
+    # Print summary table
+    print("\nGrid Search Results Summary:")
+    print(f"{'Config':<40} {'Topics':<8} {'Status':<10}")
+    print("-" * 60)
+    for result in results:
+        config_name = result['config_dir']
+        num_topics = result['num_topics']
+        status = result['status']
+        print(f"{config_name:<40} {num_topics:<8} {status:<10}")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Run sentence- or window-based BERTopic on a JSONL corpus")
+    parser = argparse.ArgumentParser(description="Run grid search BERTopic on a JSONL corpus")
     parser.add_argument("--corpus_path", required=True, help="Path to input JSONL (with '_id' and 'text').")
     parser.add_argument("--base_output_dir", required=True, help="Base directory for output files.")
 
@@ -180,27 +293,22 @@ def main():
     parser.add_argument("--embed_model", default="all-MiniLM-L6-v2", help="SentenceTransformer model name.")
     parser.add_argument("--embed_device", default="cpu", help="Device for embeddings (e.g., 'cpu' or 'cuda:0').")
 
-    # - BERTopic parameters
-    parser.add_argument("--min_topic_size", type=int, default=3, help="Minimum topic size for BERTopic.")
-    parser.add_argument("--top_n_words", type=int, default=10, help="Number of top words per topic to extract.")
-    parser.add_argument("--n_gram_range", type=lambda x: tuple(map(int, x.split(','))), default="1,3", help="Range of n-grams to consider for topic keywords (min,max)")
-    parser.add_argument("--reduce_outliers", action="store_true", help="Reduce outliers in topic model.")
-    parser.add_argument("--save_topic_model", action="store_true", default=False, help="Save the BERTopic model to disk.")
+    # Grid search parameters
+    parser.add_argument("--n_neighbors", nargs="+", type=int, default=[10, 15, 30], help="List of n_neighbors values for UMAP.")
+    parser.add_argument("--n_components", nargs="+", type=int, default=[5, 10, 15], help="List of n_components values for UMAP.")
+    parser.add_argument("--min_topic_size", nargs="+", type=int, default=[5, 10, 15], help="List of min_topic_size values for BERTopic.")
 
+    # BERTopic parameters
+    parser.add_argument("--top_n_words", type=int, default=10, help="Number of top words per topic to extract.")
+    parser.add_argument("--save_topic_model", action="store_true", default=False, help="Save the BERTopic model to disk.")
 
     args = parser.parse_args()
 
     # Ensure output directory exists
     os.makedirs(args.base_output_dir, exist_ok=True)
 
-    # output every arguments to parameters.txt
-    params_path = os.path.join(args.base_output_dir, "parameters.txt")
-    with open(params_path, "w", encoding="utf-8") as f:
-        for key, value in vars(args).items():
-            f.write(f"{key}: {value}\n")
-    print(f"Parameters written to '{params_path}'")
-
-    run_topic_modeling(
+    # Run grid search
+    run_grid_search(
         corpus_path=args.corpus_path,
         base_output_dir=args.base_output_dir,
         chunk_mode=args.chunk_mode,
@@ -208,9 +316,11 @@ def main():
         win_step=args.win_step,
         embed_model=args.embed_model,
         embed_device=args.embed_device,
+        n_neighbors_list=args.n_neighbors,
+        n_components_list=args.n_components,
+        min_topic_size_list=args.min_topic_size,
         args=args
     )
-
 
 if __name__ == "__main__":
     main()
