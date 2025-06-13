@@ -1,15 +1,15 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=6,7
+export CUDA_VISIBLE_DEVICES=0,1
 
 
 # Job Control - set which jobs to run (space-separated list)
 # Options: "base_with_topic", "base_without_topic", "trained_with_topic", plan-then-write-given-topics-plan, plan-then-write-identify-then-plan
-JOBS_TO_RUN="d2q-fewshot-topics"
+JOBS_TO_RUN="base_with_topic"
 
 # Configuration variables
 BASE_PATH="/home/guest/r12922050/GitHub/d2qplus"
 DATASET="nfcorpus"
-TOPIC_DIR="0612-01"
+TOPIC_DIR="0612-topic-size-10"
 
 # Extracted Core Phrases
 CORE_PHRASE_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/${DATASET}/topics/${TOPIC_DIR}/keywords.jsonl"
@@ -84,6 +84,7 @@ fi
 if [[ " $JOBS_TO_RUN " =~ " base_with_topic " ]]; then
     echo "Starting: ${MODEL} with topic keywords generation..."
     python3 ${BASE_PATH}/src/generate.py \
+        --test \
         --enhanced_topic_info_pkl ${ENHANCED_TOPIC_INFO_PKL} \
         --corpus_path ${CORPUS_PATH} \
         --core_phrase_path ${CORE_PHRASE_PATH} \

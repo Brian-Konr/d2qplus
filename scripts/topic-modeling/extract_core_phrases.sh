@@ -2,7 +2,7 @@
 export CUDA_VISIBLE_DEVICES=2
 # Path parameters
 DATASET="nfcorpus"
-TOPIC_NAME=0612-01
+TOPIC_NAME=0612-topic-size-10
 CORPUS_PATH="/home/guest/r12922050/GitHub/d2qplus/data/${DATASET}/corpus.jsonl"
 OUTPUT_PATH="/home/guest/r12922050/GitHub/d2qplus/augmented-data/${DATASET}/topics/${TOPIC_NAME}/keywords.jsonl"
 

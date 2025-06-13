@@ -1,0 +1,14 @@
+## MED-301: Methylmercury: A Potential Environmental Risk Factor Contributing to Epileptogenesis 
+
+Epilepsy or seizure disorder is one of the most common neurological diseases in humans. Although genetic mutations in ion channels and receptors and some other risk factors such as brain injury are linked to epileptogenesis, the underlying cause for the majority of epilepsy cases remains unknown. Gene-environment interactions are thought to play a critical role in the etiology of epilepsy. Exposure to environmental chemicals is an important risk factor. Methylmercury (MeHg) is a prominent environmental neurotoxicant, which targets primarily the central nervous system (CNS). Patients or animals with acute or chronic MeHg poisoning often display epileptic seizures or show increased susceptibility to seizures, suggesting that MeHg exposure may be associated with epileptogenesis. This mini-review highlights the effects of MeHg exposure, especially developmental exposure, on the susceptibility of humans and animals to seizures, and discusses the potential role of low level MeHg exposure in epileptogenesis. This review also proposes that a preferential effect of MeHg on the inhibitory GABAergic system, leading to disinhibition of excitatory glutamatergic function, may be one of the potential mechanisms underlying MeHg-induced changes in seizure susceptibility.
+
+## Topics & Topic Keywords
+
+### topic 152 (0.428571): Genetic factors influencing Parkinson's disease risk
+['gene environment interactions', 'pd risk', 'neurodegenerative disease', 'mutations', 'cause disease', 'environmental risk', 'disorder', 'predisposition', 'factors play', 'major causes']
+
+### topic 60 (0.571429): Mercury exposure and health effects
+['mercury exposure', 'toxicant', 'health effects', 'dose response relationship', 'susceptibility', 'conclusions studies', 'brain development', 'low level', 'seizures', 'model']
+
+## Keyphrases (consider not too frequent in similar topics)
+['humans animals seizures', 'critical role etiology', 'play critical role', 'majority epilepsy cases', 'poisoning display epileptic', 'ion channels receptors', 'gabaergic leading disinhibition', 'humans genetic mutations', 'etiology epilepsy exposure', 'seizure disorder common']

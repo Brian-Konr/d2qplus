@@ -25,10 +25,16 @@ def load_corpus(jsonl_path: str) -> pd.DataFrame:
     with open(jsonl_path, 'r') as f:
         for line in f:
             e = json.loads(line)
+
+            pred_queries = e.get('predicted_queries', [])
+            if isinstance(pred_queries, list):
+                # each query in pred_queries might be a list of strings (query set generation). If so, flatten it
+                if all(isinstance(q, list) for q in pred_queries):
+                    pred_queries = [q for sublist in pred_queries for q in sublist]
             docs.append({
                 'orig_id': e['id'], # keep original id for remapping later
                 'text': e['text'],
-                'pred_queries': e.get('predicted_queries', [])
+                'pred_queries': pred_queries
             })
     df = pd.DataFrame(docs)
     df['docno'] = df.index.astype(str)
@@ -43,6 +49,7 @@ def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: 
         os.makedirs(aug_base_dir, exist_ok=True)
 
     # 1. Prepare augmented text
+
     df['aug_text'] = df['text'] + " " + df['pred_queries'].apply(lambda qs: " ".join(qs) if isinstance(qs, list) else qs)
     
     # 2. Sparse (BM25) indices via IterDictIndexer :contentReference[oaicite:4]{index=4}

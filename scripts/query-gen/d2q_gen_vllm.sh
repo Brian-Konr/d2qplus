@@ -213,7 +213,7 @@ if [[ " $JOBS_TO_RUN " =~ " d2q-fewshot-topics " ]]; then
         --core_phrase_path ${CORE_PHRASE_PATH} \
         --use_core_phrases ${USE_CORE_PHRASES} \
         --corpus_topics_path ${CORPUS_TOPICS_PATH} \
-        --output_path "${OUTPUT_DIR}/few_shot_with_topic_${TOPIC_DIR}_${MODEL_NAME_FOR_SAVE}_${TIMESTAMP}.jsonl" \
+        --output_path "${OUTPUT_DIR}/few_shot_with_topic_${TOPIC_DIR}_${MODEL_NAME_FOR_SAVE}_${TOTAL_TARGET_QUERIES}q${TIMESTAMP}.jsonl" \
         --model ${MODEL} \
         --tensor_parallel_size ${TENSOR_PARALLEL_SIZE} \
         --gpu_memory_utilization ${GPU_MEMORY_UTILIZATION} \
