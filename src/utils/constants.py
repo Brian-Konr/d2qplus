@@ -111,7 +111,8 @@ The following are some examples:
 """
 
 PROMPTAGATOR_SET_GEN_USER_PROMPT = """Here is an article:
-Article: <document>
+Article:
+<document>
 
 Generate <num_of_queries> diverse and relevant queries for this article based on the following keywords:
 <keywords>

@@ -37,6 +37,9 @@ def main():
         doc['predicted_queries'] = keywords
 
     # save updated corpus_topic with predicted queries
+    # create output directory if it doesn't exist
+    import os
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
     with open(args.output, "w") as f:
         for doc in corpus:
             f.write(json.dumps(doc, ensure_ascii=False) + "\n")
