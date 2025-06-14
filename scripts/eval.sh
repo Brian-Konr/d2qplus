@@ -10,7 +10,7 @@ DATASET="nfcorpus" # "fiqa-bm25-5000"
 
 # List of query names to iterate through (separated by newlines)
 GEN_QUERY_NAMES=(
-    "promptagator_Llama-3.1-8B-Instruct_10q"
+    "text_add_llm_extracted_keywords"
 )
 # Remember if want to do dense indexing, need to pass --do-dense flag
 

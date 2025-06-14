@@ -13,7 +13,7 @@ def get_topic_info_dict(enhanced_topic_info_pkl: str) -> dict:
         topic_id = row['Topic']
         topic_dict[topic_id] = {
             'keywords': row['Representation'],
-            'Enhanced_Topic': row['Enhanced_Topic']
+            'Enhanced_Topic': row.get('Enhanced_Topic', '')
         }
     return topic_dict
 
@@ -56,7 +56,7 @@ def combine_topic_info(enhanced_topic_info_pkl: str, corpus_topics_path: str, co
                     'topic_id': topic_id,
                     'weight': topic['weight'],
                     'Representation': topic_info_dict[topic_id]['keywords'],
-                    'Enhanced_Topic': topic_info_dict[topic_id]['Enhanced_Topic']
+                    'Enhanced_Topic': topic_info_dict[topic_id].get("Enhanced_Topic", "")
                 }
                 enhanced_topics.append(enhanced_topic)
         

@@ -10,10 +10,11 @@ from vllm import LLM, SamplingParams
 from vllm.sampling_params import GuidedDecodingParams
 from pydantic import BaseModel
 
-from .util import read_jsonl
-from .data import combine_topic_info
+from .utils.util import read_jsonl
+from .utils.data import combine_topic_info
 
 from transformers import AutoTokenizer
+from utils.constants import PROMPTAGATOR_SET_GEN_SYS_PROMPT, PROMPTAGATOR_SET_GEN_USER_PROMPT
 
 class KeywordSet(BaseModel):
     keywords: list[str]
@@ -43,22 +44,18 @@ def truncate_document(text: str, tokenizer, max_tokens: int = 1024) -> str:
     
     return truncated_text
 
-def construct_prompt_messages(enhanced_corpus, keybert_extracted_path: str, tokenizer, final_extract_keyword_num: int = 10) -> List[List]:
+def construct_prompt_messages(enhanced_corpus, tokenizer, keywords: str, few_shots: List, query_per_doc: int = 5) -> List[List]:
     # construct messages list
     messages = []
-    docid2keywords = pd.read_pickle(keybert_extracted_path)
     for doc in enhanced_corpus:
         document = truncate_document(doc['text'], tokenizer, max_tokens=1024)
-        candidate_kws = [kw[0] for kw in docid2keywords[doc['doc_id']]]
-        # for each document, select top 3 topics' topic-level keywords
-        sorted_topics = sorted(doc['topics'], key=lambda x: x['weight'], reverse=True)[:3]
-        for topic in sorted_topics:
-            candidate_kws.extend(topic['Representation'])
+        prompt = PROMPTAGATOR_SET_GEN_SYS_PROMPT.replace("<num_of_queries>", str(query_per_doc))
+        for example in few_shots:
+            prompt += f"Article: {example['doc_text']}\n"
+            prompt += f"Query: {example['query_text']}\n\n"
+        user_template = PROMPTAGATOR_SET_GEN_USER_PROMPT
 
-
-        user_template = "You will receive a document along with a set of candidate keywords. Your task is to select the keywords that best align with the core theme of the document. Exclude keywords that are too broad or less relevant. You may list up to <final_keyword_num> keywords, using only the keywords in the candidate set.\n\nDocument: <document>\nCandidate keyword set: <keywords>\n\nWhen you reply, **only** output a JSON object of the form:\n```json\n{\"keywords\": [\"kw1\", \"kw2\", …]}\n```\nDo **not** include any additional explanations or text—just the JSON."
-
-        user_content = user_template.replace("<document>", document).replace("<keywords>", ", ".join(candidate_kws)).replace("<final_keyword_num>", str(final_extract_keyword_num))
+        user_content = user_template.replace("<document>", document).replace("<keywords>", ", ".join(keywords)).replace("<num_of_queries>", str(query_per_doc))
         messages.append(
             [
                 {
@@ -73,8 +70,6 @@ def construct_prompt_messages(enhanced_corpus, keybert_extracted_path: str, toke
 
         )
     return messages
-
-def extract_keywords_from_json(json_str: str) -> List[str]:
     """Extract keywords from a JSON string."""
     try:
         data = KeywordSet.model_validate_json(json_str)
@@ -82,23 +77,24 @@ def extract_keywords_from_json(json_str: str) -> List[str]:
     except Exception as e:
         print(f"Error parsing JSON: {e}")
         return []
-def extract_keywords_using_llm(
+def genereate_queries_using_llm(
         messages: List[List],
         llm: LLM,
         sampling_params: SamplingParams
     ) -> List[str]:
+    all_gen_q = []
 
     keywords = []
     outputs = llm.chat(messages, sampling_params)
     for i, output in enumerate(outputs):
-        generated_text = output.outputs[0].text
-        extracted_keywords = extract_keywords_from_json(generated_text)
-        if extracted_keywords:
-            keywords.append(extracted_keywords)
-        else:
-            print(f"Failed to extract keywords from output {i}: {generated_text}")
-            keywords.append([])
-    return keywords
+        all_gen_q.append([])  # Initialize list for each document
+        for seq in output.outputs:
+            queries = seq.text.strip().split('\n')
+            # Filter out empty strings and strip whitespace
+            queries = [q.strip() for q in queries if q.strip()]
+            all_gen_q[i].append(queries)
+        
+    return all_gen_q
 
 
 
@@ -107,8 +103,8 @@ def main():
     
     parser.add_argument("--topic_info_pkl", type=str,
                         help="Path to the topic information pickle file")
-    parser.add_argument("--keywords_path", type=str,
-                        help="Path to the keybert extracted file (keywords per document)")
+    parser.add_argument("--llm_keywords_path", type=str, default=None)
+    parser.add_argument("--keywords_path", type=str,default=None)
     parser.add_argument("--corpus_topics_path", type=str,
                         default="/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus_topics.jsonl",
                         help="Path to the corpus topics JSONL file")
@@ -119,6 +115,12 @@ def main():
                         default="/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/keywords/extracted_keywords.txt",
                         help="Path to save the extracted keywords")
 
+    # few shot
+    parser.add_argument("--few_shot_path", type=str, default="/home/guest/r12922050/GitHub/d2qplus/prompts/few_shot_query_set_nfcorpus.jsonl")
+    parser.add_argument("--few_shot_num", type=int, default=2)
+
+
+    
     # Model parameters
     parser.add_argument("--model", default="meta-llama/Llama-3.1-8B-Instruct",
                        help="Model name for VLLM")
@@ -145,6 +147,14 @@ def main():
         corpus_topics_path=args.corpus_topics_path,
         corpus_path=args.corpus_path
     )
+
+    llm_keywords_dict = {}
+    if args.llm_keywords_path:
+        with open(args.llm_keywords_path, "r") as f:
+            llm_keywords = [line.strip() for line in f.readlines()]
+        for line in llm_keywords:
+            doc_id, keywords = line.split(":", 1)  # only first colon is used to split
+            llm_keywords_dict[doc_id.strip()] = keywords
     
     messages = construct_prompt_messages(
         corpus, 
@@ -164,7 +174,7 @@ def main():
         guided_decoding=GuidedDecodingParams(json=json_schema)
     )
 
-    extracted_keywords = extract_keywords_using_llm(messages=messages, llm=llm, sampling_params=sampling_params)
+    extracted_keywords = genereate_queries_using_llm(messages=messages, llm=llm, sampling_params=sampling_params)
 
     corpus = read_jsonl(args.corpus_path)
     with open(args.output_path, "w") as f:

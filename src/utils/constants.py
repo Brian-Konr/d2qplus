@@ -104,17 +104,17 @@ Rules:
 """
 
 
-PROMPTAGATOR_SET_GEN_SYS_PROMPT = """You are a query generation assistant. Your task is to generate <num_of_queries> diverse queries based on the provided article.
+PROMPTAGATOR_SET_GEN_SYS_PROMPT = """You are a query generation assistant. Your task is to generate <num_of_queries> diverse and relevant queries based on the provided article.
 
 The following are some examples:
 
 """
 
 PROMPTAGATOR_SET_GEN_USER_PROMPT = """Here is an article:
-Article: [DOCUMENT]
+Article: <document>
 
-Generate <num_of_queries> relevant queries for this article based on the following keywords:
-[KEYWORDS]
+Generate <num_of_queries> diverse and relevant queries for this article based on the following keywords:
+<keywords>
 
 ----
 Rules:
