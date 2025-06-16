@@ -4,6 +4,7 @@ import json
 import argparse
 import logging
 import re
+import shutil
 from typing import Optional
 import pandas as pd
 import pyterrier as pt
@@ -91,7 +92,16 @@ def build_indexes(df: pd.DataFrame, base_dir: str, index_name: str, batch_size: 
             (doc_enc >> aug_dense_indexer).index(df[['docno','aug_text']].rename(columns={'aug_text':'text'}).to_dict('records'))
             print("Augmented dense index built successfully.")
 
-    return idx_text, idx_aug, idx_text_dense, idx_aug_dense, factory
+    return idx_text, idx_aug, idx_text_dense, idx_aug_dense, factory, idx_aug_dir
+
+def cleanup_bm25_aug_index(idx_aug_dir: str):
+    """Remove the BM25 augmented index directory."""
+    if os.path.exists(idx_aug_dir):
+        try:
+            shutil.rmtree(idx_aug_dir)
+            print(f"Cleaned up BM25 augmented index: {idx_aug_dir}")
+        except Exception as e:
+            print(f"Warning: Failed to cleanup {idx_aug_dir}: {e}")
 
 def run_experiment(idxs, factory, queries, qrels, k: int, batch_size: int, metrics, do_dense: bool = True):
     """Build retrievers, run and evaluate."""
@@ -158,7 +168,7 @@ def main():
     qrels['docno'] = qrels['docno'].map(id_map)
 
     # Build indices
-    idx_text, idx_aug, idx_td, idx_ad, factory = build_indexes(
+    idx_text, idx_aug, idx_td, idx_ad, factory, idx_aug_dir = build_indexes(
         df=corpus,
         base_dir=args.index_base_dir, 
         index_name=args.index_name, 
@@ -188,6 +198,9 @@ def main():
         factory, queries, qrels, args.k, args.batch_size, metrics,
         do_dense=args.do_dense
     )
+
+    # Cleanup BM25 augmented index
+    cleanup_bm25_aug_index(idx_aug_dir)
 
     # if args.output dir does not exist, create it
     output_dir = os.path.dirname(args.output)

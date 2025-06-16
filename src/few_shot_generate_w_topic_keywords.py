@@ -14,7 +14,7 @@ from utils.util import read_jsonl
 from utils.data import combine_topic_info
 
 from transformers import AutoTokenizer
-from utils.constants import PROMPTAGATOR_SET_GEN_SYS_PROMPT, PROMPTAGATOR_SET_GEN_USER_PROMPT
+from utils.constants import PROMPTAGATOR_SET_GEN_NO_TOPIC_KEYWORDS_USER_PROMPT, PROMPTAGATOR_SET_GEN_SYS_PROMPT, PROMPTAGATOR_SET_GEN_TOPIC_USER_PROMPT, PROMPTAGATOR_SET_GEN_USER_PROMPT
 
 import json
 
@@ -40,15 +40,23 @@ def truncate_document(text: str, tokenizer, max_tokens: int = 512) -> str:
     
     return truncated_text
 
-def construct_prompt_messages(corpus, tokenizer, docid2keywords, few_shots: List, query_per_doc: int = 5) -> List[List]:
+def construct_prompt_messages(corpus, tokenizer, llm_docid2keywords, few_shots: List, query_per_doc: int = 5, topic_num: int = 3, no_topic_keywords: bool = False, only_keywords: bool = False) -> List[List]:
     # construct messages list
+    """
+    topic_num: Number of top topics to include in the prompt
+    """
     empty_keyword_doc_cnt = 0
     messages = []
     for doc in corpus:
         document = truncate_document(doc['text'], tokenizer)
+        topics = doc.get('topics', [])
+        # sort topic by weight
+        topics = sorted(topics, key=lambda x: x['weight'], reverse=True)[:topic_num]  # take only top topic_num topics
         # Get keywords list for the document
         # Get keywords list and clean it by removing empty strings and duplicates
-        keywords = docid2keywords.get(doc['doc_id'], [])
+        keywords = llm_docid2keywords.get(doc['doc_id'], [])
+        if not keywords:
+            keywords = doc['keywords']
         keywords = keywords[:10]
         if not keywords:
             empty_keyword_doc_cnt += 1
@@ -57,14 +65,21 @@ def construct_prompt_messages(corpus, tokenizer, docid2keywords, few_shots: List
             sys_prompt += f"Article:\n{example['doc_text']}\n\n"
             sys_prompt += f"Query:\n{example['query_text']}\n\n"
 
-        user_template = PROMPTAGATOR_SET_GEN_USER_PROMPT
+        user_template = PROMPTAGATOR_SET_GEN_NO_TOPIC_KEYWORDS_USER_PROMPT
+        if topics:
+            user_template = PROMPTAGATOR_SET_GEN_TOPIC_USER_PROMPT
+            user_template = user_template.replace("<topics>", "\n".join([f"{t['Enhanced_Topic']}" for t in topics]))
 
         user_content = user_template.replace("<document>", document).replace("<num_of_queries>", str(query_per_doc))
-        if keywords:
-            user_content = user_content.replace("<keywords>", ", ".join(keywords))
+        user_content = user_content.replace("<keywords>", ", ".join(keywords))
 
+        if only_keywords:
+            user_template = PROMPTAGATOR_SET_GEN_USER_PROMPT
+            user_content = user_template.replace("<document>", document).replace("<num_of_queries>", str(query_per_doc)).replace("<keywords>", ", ".join(keywords))
+        elif no_topic_keywords:
+            user_content = PROMPTAGATOR_SET_GEN_NO_TOPIC_KEYWORDS_USER_PROMPT.replace("<document>", document).replace("<num_of_queries>", str(query_per_doc))
+            
         messages.append([{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_content}])
-    print(f"Number of documents with empty keywords: {empty_keyword_doc_cnt}")
     return messages
 def genereate_queries_using_llm(
         messages: List[List],
@@ -93,15 +108,20 @@ def main():
     parser.add_argument("--corpus_path", type=str,
                         default="/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus.jsonl",
                         help="Path to the corpus JSONL file")
+    parser.add_argument("--core_phrase_pkl", type=str, default="/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/keywords/candidate_keywords_scibert.pkl",
+                        help="Path to the core phrase pickle file")
     parser.add_argument("--topic_dir", type=str, required=True,
                         help="Path to the directory containing topic information files that guide the query generation")
+    parser.add_argument("--llm_keywords_path", type=str, help="Path to the LLM extracted keywords JSONL file (doc_id -> keywords)")
 
     # few shot
     parser.add_argument("--few_shot_path", type=str, default="/home/guest/r12922050/GitHub/d2qplus/prompts/few_shot_query_set_nfcorpus.jsonl")
-    parser.add_argument("--few_shot_num", type=int, default=2)
+    parser.add_argument("--few_shot_num", type=int, default=4)
 
     parser.add_argument("--query_per_doc", type=int, default=5,
                         help="Number of queries to generate per document")
+    parser.add_argument("--topic_num", type=int, default=3,
+                        help="Number of top topics to include in the prompt (default: 3)")
     parser.add_argument("--num_return_sequences", type=int, default=1,
                         help="Number of sequences to return per message (that is, number of query set per document)")
         
@@ -122,6 +142,11 @@ def main():
     # misc
     parser.add_argument("--run", type=int, default=0) # record run to prevent output collision
     parser.add_argument("--test", action="store_true", default=False)
+
+    parser.add_argument("--no-topic-keywords", action="store_true", default=False,
+                        help="If set, do not use topic keywords in the prompt")
+    parser.add_argument("--only-keywords", action="store_true", default=False,
+                        help="If set, only use keywords in the prompt without topics")
     
     
     args = parser.parse_args()
@@ -129,11 +154,11 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.model)
 
     # construct docid2keywords dict (docid -> keywords str)
-    docid2keywords = {}
-    llm_keywords_path = args.topic_dir + "/keywords.jsonl"
+    llm_docid2keywords = {}
+    llm_keywords_path = args.llm_keywords_path
     with open(llm_keywords_path, "r") as f:
         llm_keywords = [json.loads(line) for line in f.readlines()]
-    docid2keywords = {e['doc_id']: e['keywords'] for e in llm_keywords}
+    llm_docid2keywords = {e['doc_id']: e['keywords'] for e in llm_keywords}
 
     few_shots = []
     with open(args.few_shot_path, "r") as f:
@@ -141,9 +166,10 @@ def main():
         few_shots = few_shot_data[:args.few_shot_num]  # take only the first few_shot_num examples
 
     corpus = combine_topic_info(
-        enhanced_topic_info_pkl=f"{args.topic_dir}/topic_info_dataframe.pkl",
+        enhanced_topic_info_pkl=f"{args.topic_dir}/topic_info_dataframe_enhanced.pkl",
         corpus_topics_path=f"{args.topic_dir}/doc_topics.jsonl",
-        corpus_path=args.corpus_path
+        corpus_path=args.corpus_path,
+        core_phrase_pkl=args.core_phrase_pkl
     )
 
     if args.test:
@@ -152,9 +178,12 @@ def main():
     messages = construct_prompt_messages(
         corpus=corpus, 
         tokenizer=tokenizer,
-        docid2keywords=docid2keywords,
+        llm_docid2keywords=llm_docid2keywords,
         few_shots=few_shots,
-        query_per_doc=args.query_per_doc
+        query_per_doc=args.query_per_doc,
+        topic_num=args.topic_num,
+        no_topic_keywords=args.no_topic_keywords,
+        only_keywords=args.only_keywords
     )
 
     # output top 3 messages to check
@@ -179,7 +208,13 @@ def main():
     # if output directory doesn't exist, create it
     # output dir is topic_dir + /gen
     total_query_per_doc = args.query_per_doc * args.num_return_sequences
-    output_path = os.path.join(args.topic_dir, "gen", f"{args.few_shot_num}shot_{args.query_per_doc}perdoc_{args.num_return_sequences}beam_{total_query_per_doc}total_{args.run}.jsonl")
+    output_info = f"{args.few_shot_num}shot_{args.query_per_doc}perdoc_{args.num_return_sequences}beam_{args.temperature}temp{total_query_per_doc}total_topic_keywords"
+    if args.only_keywords:
+        # remove topic keywords from output_info
+        output_info = output_info.replace("topic_keywords", "only_keywords")
+    elif args.no_topic_keywords:
+        output_info = output_info.replace("topic_keywords", "no_topic_keywords")
+    output_path = os.path.join(args.topic_dir, "gen", f"{output_info}_{args.run}.jsonl")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)    
 
     output_data = []

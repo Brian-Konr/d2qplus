@@ -7,7 +7,7 @@ def visualize_topic_keywords():
     corpus = combine_topic_info(
         enhanced_topic_info_pkl=topic_dir + "/topic_info_dataframe_enhanced.pkl",
         corpus_topics_path=topic_dir + "/doc_topics.jsonl",
-        core_phrase_path=topic_dir + "/keywords.jsonl",
+        keyword_path=topic_dir + "/keywords.jsonl",
         corpus_path=corpus_path,
     )
 

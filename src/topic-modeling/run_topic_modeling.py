@@ -76,6 +76,7 @@ def run_topic_modeling(
             obj = json.loads(line)
             doc_id, text = obj.get("_id"), obj.get("text", "")
             if doc_id is None or not isinstance(text, str):
+                print(f"Skipping document with missing or invalid '_id' or 'text': {obj}", file=sys.stderr)
                 continue
             doc_chunks = chunk_document(text, mode=chunk_mode, win_size=win_size, win_step=win_step)
             for ch in doc_chunks:
@@ -93,27 +94,25 @@ def run_topic_modeling(
         print(f"Error loading embedder '{embed_model}' on '{embed_device}': {e}", file=sys.stderr)
         sys.exit(1)
 
-    pos_patterns = [
-        [{'POS': 'ADJ'},  {'POS': 'NOUN'}],   # adjective-noun, e.g. "gene expression"
-        [{'POS': 'NOUN'}],                    # single noun,  e.g. "oncogene"
-        [{'POS': 'PROPN'}]                    # proper noun  e.g. "CRISPR"
-    ]
+    # pos_patterns = [
+    #     [{'POS': 'ADJ'},  {'POS': 'NOUN'}],   # adjective-noun, e.g. "gene expression"
+    #     [{'POS': 'NOUN'}],                    # single noun,  e.g. "oncogene"
+    #     [{'POS': 'PROPN'}]                    # proper noun  e.g. "CRISPR"
+    # ]
 
-    pos = PartOfSpeech("en_core_sci_sm", pos_patterns=pos_patterns, top_n_words=250)
-    keybert = KeyBERTInspired(nr_candidate_words=100, nr_repr_docs=5, top_n_words=25)
-    mmr = MaximalMarginalRelevance(diversity=0.6, top_n_words=args.top_n_words)
+    # pos = PartOfSpeech("en_core_sci_sm", pos_patterns=pos_patterns, top_n_words=250)
+    # keybert = KeyBERTInspired(nr_candidate_words=100, nr_repr_docs=5, top_n_words=25)
+    # mmr = MaximalMarginalRelevance(diversity=0.6, top_n_words=args.top_n_words)
 
-    representation_chain = [pos, keybert, mmr]
-
-    vectorizer = CountVectorizer(stop_words="english", ngram_range=args.n_gram_range, min_df=5)
+    # representation_chain = [pos, keybert, mmr]
 
     # Initialize BERTopic
     topic_model = BERTopic(
         embedding_model=embedder,
         umap_model=UMAP(n_components=5, metric="cosine"),
         min_topic_size=args.min_topic_size,
-        vectorizer_model=vectorizer,
-        representation_model=representation_chain,
+        n_gram_range=args.n_gram_range,
+        # representation_model=representation_chain,
         verbose=True
     )
 

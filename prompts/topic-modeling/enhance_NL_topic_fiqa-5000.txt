@@ -1,0 +1,62 @@
+You will extract a short topic label from given documents and keywords.
+Here are four examples of topics you created before:
+
+# Example 1
+
+Sample texts from this topic:
+
+* But if you believe the price will go down, the only way to buy low and sell high is to sell first and buy later.
+* With your comment, you have stated that your scenario is that you believe that the stock will go up long term, but you also believe that the stock is at a short-term peak and will drop in the near future.
+* You believe that the stock is a long-term buy, but for some reason you are guessing that the stock will drop in the short-term.
+
+Keywords: stock the stock price stock price stock is the price buy sell value share
+topic: Short-Term Stock Trading
+
+# Example 2
+
+Sample texts from this topic:
+
+* Pulling from that link, Any domestic stock life insurance corporation, incorporated under a general law, may become a mutual life insurance corporation, and to that end may carry out a plan for the acquisition of shares of its capital stock…
+* As someone who has worked for both an insurance carrier and an insurance agent, the reason people buy insurance is two fold: to spread risk out, and to get the benefits (when applicable) of approaching risk as a group.
+* Insurance companies track which cars their clients own, and report condensed claims statistics for each model back to a central service provider…
+
+Keywords: insurance coverage an insurance the insurance insurance company premiums insurance companies insurance is insure group
+topic: Insurance Coverage and Policy Structures
+
+# Example 3
+
+Sample texts from this topic:
+
+* Talk to a licensed tax adviser (EA/CPA) about these.
+* Better talk to a licensed tax adviser (EA/CPA licensed in your State) for anything other than trivial.
+* First, you should probably have a proper consultation with a licensed tax adviser (EA/CPA licensed in your State).
+
+Keywords: tax irs 1099 1040 the irs cpa form accountant taxes tax accountant
+topic: Consulting a Tax Advisor on IRS Forms
+
+# Example 4
+
+Sample texts from this topic:
+
+* Just do the numbers.
+* Did you do the numbers?
+* These are the numbers.
+
+Keywords: numbers math the numbers the math calculation taylor series taylor series calculations assumptions
+topic: Performing Numerical Calculations
+
+# Your task
+
+Sample texts from this topic:
+[DOCUMENTS]
+
+Keywords: 
+[KEYWORDS]
+
+**Crucial Output Instruction:**
+You MUST generate a single line as your response.
+This line MUST start EXACTLY with `topic: ` (including the space after the colon).
+Following `topic: `, provide ONLY the concise topic label.
+Do NOT add any other text, explanations, numbering, markdown, or any content before or after this single line.
+
+topic:

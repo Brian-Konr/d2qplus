@@ -103,8 +103,8 @@ def run_topic_modeling(
         [{'POS': 'PROPN'}]                    # proper noun  e.g. "CRISPR"
     ]
 
-    keybert = KeyBERTInspired(nr_candidate_words=100, nr_repr_docs=5, top_n_words=25)
     pos = PartOfSpeech("en_core_sci_sm", pos_patterns=pos_patterns, top_n_words=200)
+    keybert = KeyBERTInspired(nr_candidate_words=100, nr_repr_docs=5, top_n_words=25)
     mmr = MaximalMarginalRelevance(diversity=0.6, top_n_words=args.top_n_words)
 
     representation_chain = [pos, keybert, mmr]

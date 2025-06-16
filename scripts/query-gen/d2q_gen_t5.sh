@@ -3,7 +3,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 # Generate queries using DocTTTTTQuery
 
-DATASET=fiqa
+DATASET=fiqa-5000
 NUM_GENERATED_QUERIES=20
 
 TOTAL_QUERIES=100

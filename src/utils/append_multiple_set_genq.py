@@ -17,7 +17,7 @@ def write_jsonl(data: List[Dict[Any, Any]], filepath: str) -> None:
         for item in data:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
-def merge_generated_queries(input_files: List[str], output_file: str, num_q_to_keep: int = None) -> None:
+def merge_generated_queries(input_files: List[str], output_file: str, num_to_keep, keywords_path: str = None) -> None:
     """
     Merge multiple gen_queries.jsonl files by extending their predicted_queries fields.
     
@@ -25,6 +25,14 @@ def merge_generated_queries(input_files: List[str], output_file: str, num_q_to_k
         input_files: List of paths to input gen_queries.jsonl files
         output_file: Path to output unified file
     """
+
+    docid2kw = None
+    if keywords_path:
+        print(f"🔍 Loading keywords from: {keywords_path}")
+        with open(keywords_path, 'r') as f:
+            keywords = [json.loads(f) for f in f.readlines()]
+        docid2kw = {d["doc_id"]: d["keywords"] for d in keywords}
+        print(f"  ✅ Loaded {len(keywords)} keywords")
     print(f"📥 Loading {len(input_files)} input files...")
     
     # Dictionary to store merged data by document ID
@@ -47,8 +55,13 @@ def merge_generated_queries(input_files: List[str], output_file: str, num_q_to_k
                 continue
                 
             predicted_queries = doc.get("predicted_queries", [])
+            # predicted_queries is a list of lists, flatten it
+            if isinstance(predicted_queries, list) and all(isinstance(q, list) for q in predicted_queries):
+                predicted_queries = [q for sublist in predicted_queries for q in sublist]
             
             if doc_id not in merged_data:
+                if docid2kw:
+                    predicted_queries.extend(docid2kw.get(doc_id, ""))
                 # First time seeing this document
                 merged_data[doc_id] = {
                     "id": doc_id,
@@ -59,7 +72,17 @@ def merge_generated_queries(input_files: List[str], output_file: str, num_q_to_k
             else:
                 # Extend existing predicted_queries
                 merged_data[doc_id]["predicted_queries"].extend(predicted_queries)
-    
+    # If num_to_keep is specified, limit the number of queries
+    if num_to_keep is not None:
+        import random
+        import time
+        random.seed(int(time.time()))
+        print(f"  📏 Limiting to {num_to_keep} queries per document")
+        for doc in merged_data.values():
+            # Randomly shuffle the predicted queries before taking num_to_keep
+            random.shuffle(doc["predicted_queries"])
+            doc["predicted_queries"] = doc["predicted_queries"][:num_to_keep]
+
     # Convert to list and sort by ID for consistent output
     unified_data = list(merged_data.values())
     unified_data.sort(key=lambda x: x["id"])
@@ -80,12 +103,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Merge multiple gen_queries.jsonl files by extending predicted_queries")
     parser.add_argument("--input_files", type=str, nargs='+', required=True, 
                        help="List of input gen_queries.jsonl file paths")
+    parser.add_argument("--num_q_to_keep", type=int, default=None,
+                        help="Number of queries to keep per document (default: None, keep all)")
     parser.add_argument("--output_file", type=str, required=True,
                        help="Path to output unified gen_queries.jsonl file")
     parser.add_argument("--verbose", action="store_true", default=False,
                        help="Print detailed information during processing")
-    parser.add_argument("--num_q_to_keep", type=int, default=None,
-                        help="Number of queries to keep per document (if specified, will limit the number of queries)")
+    parser.add_argument("--keyword_path", type=str, default=None,
+                       help="Path to keyword file (If provided, will add keywords to each document)")
     
     return parser.parse_args()
 
@@ -100,5 +125,5 @@ if __name__ == "__main__":
         for i, file in enumerate(args.input_files, 1):
             print(f"  {i}. {file}")
     
-    merge_generated_queries(args.input_files, args.output_file, num_q_to_keep=args.num_q_to_keep)
+    merge_generated_queries(args.input_files, args.output_file, args.num_q_to_keep, args.keyword_path)
     print(f"🎉 Merge completed!")

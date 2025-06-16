@@ -14,6 +14,7 @@ from .util import read_jsonl
 from .data import combine_topic_info
 
 from transformers import AutoTokenizer
+from .constants import LLM_EXTRACT_KEYWORD_USER_PROMPT
 
 class KeywordSet(BaseModel):
     keywords: list[str]
@@ -43,10 +44,12 @@ def truncate_document(text: str, tokenizer, max_tokens: int = 1024) -> str:
     
     return truncated_text
 
-def construct_prompt_messages(enhanced_corpus, keybert_extracted_path: str, tokenizer, final_extract_keyword_num: int = 10) -> List[List]:
+def construct_prompt_messages(enhanced_corpus, docid2keywords: str, tokenizer, final_extract_keyword_num: int = 10) -> List[List]:
+    """
+    docid2keywords: dict mapping document IDs to lists of keywords (extracted by KeyBERT)
+    """
     # construct messages list
     messages = []
-    docid2keywords = pd.read_pickle(keybert_extracted_path)
     for doc in enhanced_corpus:
         document = truncate_document(doc['text'], tokenizer, max_tokens=1024)
         candidate_kws = [kw[0] for kw in docid2keywords[doc['doc_id']]]
@@ -56,14 +59,15 @@ def construct_prompt_messages(enhanced_corpus, keybert_extracted_path: str, toke
             candidate_kws.extend(topic['Representation'])
 
 
-        user_template = "You will receive a document along with a set of candidate keywords. Your task is to select the keywords that best align with the core theme of the document. Exclude keywords that are too broad or less relevant. You may list up to <final_keyword_num> keywords, using only the keywords in the candidate set.\n\nDocument: <document>\nCandidate keyword set: <keywords>\n\nWhen you reply, **only** output a JSON object of the form:\n```json\n{\"keywords\": [\"kw1\", \"kw2\", …]}\n```\nDo **not** include any additional explanations or text—just the JSON."
+        user_template = LLM_EXTRACT_KEYWORD_USER_PROMPT
+
 
         user_content = user_template.replace("<document>", document).replace("<keywords>", ", ".join(candidate_kws)).replace("<final_keyword_num>", str(final_extract_keyword_num))
         messages.append(
             [
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant that selects the most relevant keywords for a given document. Your task is to choose keywords that best represent the core theme of the document."
+                    "content": "You are a helpful assistant that selects the most relevant keywords from a candidate keyword set for a given document."
                 },
                 {
                     "role": "user",
@@ -82,22 +86,53 @@ def extract_keywords_from_json(json_str: str) -> List[str]:
     except Exception as e:
         print(f"Error parsing JSON: {e}")
         return []
-def extract_keywords_using_llm(
+
+def extract_keywords_using_llm_with_retry(
         messages: List[List],
+        doc_keywords: List[List],
         llm: LLM,
-        sampling_params: SamplingParams
+        sampling_params: SamplingParams,
+        max_retries: int = 3
     ) -> List[str]:
 
     keywords = []
     outputs = llm.chat(messages, sampling_params)
+    
     for i, output in enumerate(outputs):
         generated_text = output.outputs[0].text
         extracted_keywords = extract_keywords_from_json(generated_text)
+        
         if extracted_keywords:
             keywords.append(extracted_keywords)
         else:
-            print(f"Failed to extract keywords from output {i}: {generated_text}")
-            keywords.append([])
+            print(f"Failed to extract keywords from output {i}, retrying with different sampling...")
+            
+            # Retry logic with max_retries
+            success = False
+            for retry_count in range(max_retries):
+                print(f"Retry attempt {retry_count + 1}/{max_retries} for document {i}")
+                
+                # Use different sampling parameters for each retry
+                retry_sampling = SamplingParams(
+                    temperature=max(0.01, sampling_params.temperature - 0.1 * (retry_count + 1)),  # Decrease temperature
+                    max_tokens=sampling_params.max_tokens,
+                    guided_decoding=sampling_params.guided_decoding
+                )
+                
+                retry_output = llm.chat([messages[i]], retry_sampling)
+                retry_text = retry_output[0].outputs[0].text
+                retry_keywords = extract_keywords_from_json(retry_text)
+                
+                if retry_keywords:
+                    keywords.append(retry_keywords)
+                    success = True
+                    print(f"Retry successful on attempt {retry_count + 1}")
+                    break
+            
+            if not success:
+                print(f"All {max_retries} retries failed for document {i}, using empty list")
+                keywords.append(doc_keywords[i])
+    
     return keywords
 
 
@@ -115,8 +150,7 @@ def main():
     parser.add_argument("--corpus_path", type=str,
                         default="/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus.jsonl",
                         help="Path to the corpus JSONL file")
-    parser.add_argument("--output_path", type=str,
-                        default="/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/keywords/extracted_keywords.txt",
+    parser.add_argument("--output_path", type=str,required=True,
                         help="Path to save the extracted keywords")
 
     # Model parameters
@@ -146,13 +180,20 @@ def main():
         corpus_path=args.corpus_path
     )
     
+    docid2keywords = pd.read_pickle(args.keywords_path)
     messages = construct_prompt_messages(
         corpus, 
-        keybert_extracted_path=args.keywords_path, 
+        docid2keywords=docid2keywords, 
         final_extract_keyword_num=args.final_extract_keywords_num,
         tokenizer=tokenizer
     )
 
+    # print out some messages to check
+    for i, message in enumerate(messages[:3]):
+        print(f"Message {i}:")
+        for part in message:
+            print(f"  {part['role']}: {part['content']}")
+    
     # vllm part
     llm = LLM(model=args.model, 
               tensor_parallel_size=args.tensor_parallel_size, 
@@ -164,14 +205,19 @@ def main():
         guided_decoding=GuidedDecodingParams(json=json_schema)
     )
 
-    extracted_keywords = extract_keywords_using_llm(messages=messages, llm=llm, sampling_params=sampling_params)
+    # construct KeyBERT extracted keywords list (list of keywords for each document) for fallback if needed
+    doc_keywords = [[kw[0] for kw in docid2keywords[doc['doc_id']]] for doc in corpus]
+
+    extracted_keywords = extract_keywords_using_llm_with_retry(messages=messages, doc_keywords=doc_keywords, llm=llm, sampling_params=sampling_params)
 
     corpus = read_jsonl(args.corpus_path)
+
+    import json
     with open(args.output_path, "w") as f:
         for doc, keywords in zip(corpus, extracted_keywords):
             doc_id = doc['_id']
-            keywords_str = ", ".join(keywords)
-            f.write(f"{doc_id}: {keywords_str}\n")
+            entry = {"doc_id": doc_id, "text": doc['text'], "keywords": keywords}
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     
 if __name__ == "__main__":

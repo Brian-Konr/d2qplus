@@ -5,7 +5,7 @@ Example usage of the simplified scoring functions.
 
 import torch
 from sentence_transformers import SentenceTransformer
-from src.scoring import QueryScorer, QueryFilterScorer
+from scoring import QueryScorer, QueryFilterScorer
 
 def example_basic_scoring():
     """Example of basic query scoring without complex setup."""

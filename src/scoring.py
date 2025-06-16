@@ -167,66 +167,106 @@ class QuerySelector:
         }
 
 def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Greedy query selection based on topic coverage, diversity, and relevance")
+    
+    # Input/Output paths
+    parser.add_argument("--topic-dir", type=str, required=True,
+                       help="Directory containing topic modeling results")
+    parser.add_argument("--corpus-path", type=str, 
+                       default="/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus.jsonl",
+                       help="Path to the corpus JSONL file")
+    parser.add_argument("--queries-file", type=str, required=True,
+                       help="Path to candidate queries JSONL file")
+    parser.add_argument("--output-file", type=str, required=True,
+                       help="Path to save selected queries")
+    
+    # Model parameters
+    parser.add_argument("--embed-model", type=str,
+                       default="pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb",
+                       help="Sentence transformer model for embeddings")
+    parser.add_argument("--device", type=str, default="cuda",
+                       help="Device to use for model inference")
+    
+    # Selection parameters
+    parser.add_argument("--num-query-set", type=int, default=5,
+                       help="Number of query sets to keep per document")
+    parser.add_argument("--softmax-tau", type=float, default=0.07,
+                       help="Temperature parameter for softmax assignment")
+    parser.add_argument("--similarity-threshold", type=float, default=0.7,
+                       help="Threshold for topic similarity")
+    
+    # Scoring weights
+    parser.add_argument("--lambda-tc", type=float, default=1.0,
+                       help="Weight for topic coverage score")
+    parser.add_argument("--lambda-kw", type=float, default=1.0,
+                       help="Weight for keyword coverage score")
+    parser.add_argument("--lambda-div", type=float, default=1.0,
+                       help="Weight for diversity score")
+    parser.add_argument("--lambda-relevance", type=float, default=1.0,
+                       help="Weight for relevance score")
+    parser.add_argument("--topic-coverage-metric", type=str, default="f1",
+                       choices=["precision", "recall", "f1"],
+                       help="Metric to use for topic coverage")
+    
+    
+    args = parser.parse_args()
     
     # Set environment variables to avoid tokenizer warnings
     import os
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-    
+        
     print("🚀 Starting greedy query selection...")
+    print(f"📂 Topic directory: {args.topic_dir}")
+    print(f"📋 Queries file: {args.queries_file}")
+    print(f"💾 Output file: {args.output_file}")
     
-    topic_dir = "/home/guest/r12922050/GitHub/d2qplus/augmented-data/nfcorpus/topics/0612-01"
-    enhanced_topic_info_path = f"{topic_dir}/topic_info_dataframe_enhanced.pkl"
-    doc_topics_path = f"{topic_dir}/doc_topics.jsonl"
-    core_phrases_path = f"{topic_dir}/keywords.jsonl"
-    corpus_path = "/home/guest/r12922050/GitHub/d2qplus/data/nfcorpus/corpus.jsonl"
+    # Construct file paths
+    topic_info_path = f"{args.topic_dir}/topic_info_dataframe.pkl"
+    doc_topics_path = f"{args.topic_dir}/doc_topics.jsonl"
+    keywords_path = f"{args.topic_dir}/keywords.jsonl"
 
     print("📂 Loading enhanced corpus...")
-    enhanced_corpus = combine_topic_info(enhanced_topic_info_path, doc_topics_path, corpus_path, core_phrases_path)
+    enhanced_corpus = combine_topic_info(topic_info_path, doc_topics_path, args.corpus_path, keywords_path)
     print(f"✅ Loaded {len(enhanced_corpus)} documents")
-    
-    import pandas as pd
-    print("📊 Loading topic information...")
-    enhanced_topics = pd.read_pickle(enhanced_topic_info_path)
-    topic_ids = enhanced_topics["Topic"].tolist()
-    enhanced_topics = enhanced_topics["Enhanced_Topic"].tolist() # natural language topic label for each topic
-    print(f"✅ Loaded {len(topic_ids)} topics")
 
-    print("🤖 Loading embedding model...")
-    embed_model = SentenceTransformer("pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb", device="cuda")
-    print("🔢 Encoding topic embeddings...")
-    embs = embed_model.encode(enhanced_topics, convert_to_tensor=True, normalize_embeddings=True)
-    topic_lookup = {int(tid): emb.cpu() for tid, emb in zip(topic_ids, embs)}
-    print("✅ Topic embeddings ready")
+    print(f"🤖 Loading embedding model: {args.embed_model}")
+    embed_model = SentenceTransformer(args.embed_model, device=args.device)
 
-    queries_file = "/home/guest/r12922050/GitHub/d2qplus/gen/nfcorpus/promptagator_Llama-3.1-8B-Instruct_20q.jsonl"
     print("📋 Loading candidate queries...")
-    with open(queries_file, "r", encoding="utf-8") as f:
+    with open(args.queries_file, "r", encoding="utf-8") as f:
         queries = [json.loads(line) for line in f]
         docid2queries = {(d["id"]): d["predicted_queries"] for d in queries}
     print(f"✅ Loaded queries for {len(docid2queries)} documents")
     
     print("🎯 Starting greedy selection for each document...")
-    
+    print(f"⚙️  Parameters: tc={args.lambda_tc}, kw={args.lambda_kw}, div={args.lambda_div}, rel={args.lambda_relevance}")
     
     new_queries = []
     scored_queries = []
-
-    B = 6 # number of query set to keep
+    
+    topic_centroids = torch.load(f"{args.topic_dir}/topic_centroids.pt")
+    
+    # Create a mapping from topic ID to embedding vector
+    # Since centroids[0] corresponds to topic 0, centroids[1] to topic 1, etc.
+    topic_vecs = {i: topic_centroids[i] for i in range(len(topic_centroids))}
+    
     for doc in enhanced_corpus:
         doc_id = doc["doc_id"]
         selector = QuerySelector(
             embed_model=embed_model,
-            topic_vecs=topic_lookup,
-            topic_ids=topic_ids,
+            topic_vecs=topic_vecs,
+            topic_ids=[topic["topic_id"] for topic in doc["topics"]],
             topic_weights=doc["topic_weights"],
             keywords=doc["keywords"],
-            softmax_tau=0.07,
-            lambda_tc=1.0,  # weight for topic coverage
-            topic_coverage_metric="f1",  # 'precision' | 'recall' | 'f1'
-            lambda_kw=1.0,  # weight for keyword coverage
-            lambda_div=1.0,  # weight for diversity
-            lambda_relevance=1.0,  # weight for relevance
-            similarity_threshold=0.7,  # threshold for topic similarity
+            softmax_tau=args.softmax_tau,
+            lambda_tc=args.lambda_tc,
+            topic_coverage_metric=args.topic_coverage_metric,
+            lambda_kw=args.lambda_kw,
+            lambda_div=args.lambda_div,
+            lambda_relevance=args.lambda_relevance,
+            similarity_threshold=args.similarity_threshold,
         )
         print(f"Processing document {doc_id} with {len(docid2queries[doc_id])} candidate queries...")
         query_sets = docid2queries[doc_id]
@@ -249,12 +289,11 @@ def main():
             "doc_id": doc_id,
             "title": doc["title"],
             "text": doc["text"],
-            "queries": [q for q, score in scores[:B]],  # Keep top B query set
+            "queries": [q for q, score in scores[:args.num_query_set]],  # Keep top B query set
         })
     
-    output_file = "/home/guest/r12922050/GitHub/d2qplus/gen/nfcorpus/greed_select_10.jsonl"
-    print(f"💾 Saving results to {output_file}")
-    with open(output_file, "w") as f:
+    print(f"💾 Saving results to {args.output_file}")
+    with open(args.output_file, "w") as f:
         for item in new_queries:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
     

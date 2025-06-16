@@ -42,16 +42,11 @@ def truncate_document(text: str, tokenizer, max_tokens: int = 512) -> str:
 
 def construct_prompt_messages(corpus, tokenizer, docid2keywords, few_shots: List, query_per_doc: int = 5) -> List[List]:
     # construct messages list
-    empty_keyword_doc_cnt = 0
+    
     messages = []
     for doc in corpus:
         document = truncate_document(doc['text'], tokenizer)
-        # Get keywords list for the document
-        # Get keywords list and clean it by removing empty strings and duplicates
-        keywords = docid2keywords.get(doc['doc_id'], [])
-        keywords = keywords[:10]
-        if not keywords:
-            empty_keyword_doc_cnt += 1
+        keywords = docid2keywords[doc['doc_id']]
         sys_prompt = PROMPTAGATOR_SET_GEN_SYS_PROMPT.replace("<num_of_queries>", str(query_per_doc))
         for example in few_shots:
             sys_prompt += f"Article:\n{example['doc_text']}\n\n"
@@ -59,12 +54,8 @@ def construct_prompt_messages(corpus, tokenizer, docid2keywords, few_shots: List
 
         user_template = PROMPTAGATOR_SET_GEN_USER_PROMPT
 
-        user_content = user_template.replace("<document>", document).replace("<num_of_queries>", str(query_per_doc))
-        if keywords:
-            user_content = user_content.replace("<keywords>", ", ".join(keywords))
-
+        user_content = user_template.replace("<document>", document).replace("<keywords>", keywords).replace("<num_of_queries>", str(query_per_doc))
         messages.append([{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_content}])
-    print(f"Number of documents with empty keywords: {empty_keyword_doc_cnt}")
     return messages
 def genereate_queries_using_llm(
         messages: List[List],
@@ -119,8 +110,6 @@ def main():
     parser.add_argument("--max_tokens", type=int, default=256,
                        help="Maximum tokens to generate")
     
-    # misc
-    parser.add_argument("--run", type=int, default=0) # record run to prevent output collision
     parser.add_argument("--test", action="store_true", default=False)
     
     
@@ -130,15 +119,20 @@ def main():
 
     # construct docid2keywords dict (docid -> keywords str)
     docid2keywords = {}
-    llm_keywords_path = args.topic_dir + "/keywords.jsonl"
+    llm_keywords_path = args.topic_dir + "/llm_extracted_keywords.txt"
     with open(llm_keywords_path, "r") as f:
-        llm_keywords = [json.loads(line) for line in f.readlines()]
-    docid2keywords = {e['doc_id']: e['keywords'] for e in llm_keywords}
+        llm_keywords = [line.strip() for line in f.readlines()]
+    for line in llm_keywords:
+        doc_id, keywords = line.split(":", 1)  # only first colon is used to split
+        docid2keywords[doc_id.strip()] = keywords
+    # elif 自己加整入不同 keywords 的方式
 
+    import random
     few_shots = []
     with open(args.few_shot_path, "r") as f:
         few_shot_data = [json.loads(line) for line in f.readlines()]
-        few_shots = few_shot_data[:args.few_shot_num]  # take only the first few_shot_num examples
+        # Randomly sample few_shot_num examples
+        few_shots = random.sample(few_shot_data, args.few_shot_num)
 
     corpus = combine_topic_info(
         enhanced_topic_info_pkl=f"{args.topic_dir}/topic_info_dataframe.pkl",
@@ -179,7 +173,7 @@ def main():
     # if output directory doesn't exist, create it
     # output dir is topic_dir + /gen
     total_query_per_doc = args.query_per_doc * args.num_return_sequences
-    output_path = os.path.join(args.topic_dir, "gen", f"{args.few_shot_num}shot_{args.query_per_doc}perdoc_{args.num_return_sequences}beam_{total_query_per_doc}total_{args.run}.jsonl")
+    output_path = os.path.join(args.topic_dir, "gen", f"few_shot_query_set_gen_{total_query_per_doc}q.jsonl")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)    
 
     output_data = []

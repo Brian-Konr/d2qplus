@@ -94,9 +94,12 @@ The following are some examples:
 
 """
 
-PROMPTAGATOR_USER_PROMPT = """Here is an article. Generate a relevant query for this article:
-Article: [DOCUMENT]
+PROMPTAGATOR_USER_PROMPT = """Here is an article.
+Article: 
 
+[DOCUMENT]
+
+Generate a relevant query for this article:
 ----
 Rules:
 - NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
@@ -104,7 +107,7 @@ Rules:
 """
 
 
-PROMPTAGATOR_SET_GEN_SYS_PROMPT = """You are a query generation assistant. Your task is to generate <num_of_queries> diverse and relevant queries based on the provided article.
+PROMPTAGATOR_SET_GEN_SYS_PROMPT = """You are a query generation assistant. Your task is to generate <num_of_queries> relevant queries based on the provided article.
 
 The following are some examples:
 
@@ -114,7 +117,8 @@ PROMPTAGATOR_SET_GEN_USER_PROMPT = """Here is an article:
 Article:
 <document>
 
-Generate <num_of_queries> diverse and relevant queries for this article based on the following keywords:
+
+Generate <num_of_queries> relevant queries for this article based on the following keywords:
 <keywords>
 
 ----
@@ -122,3 +126,57 @@ Rules:
 - NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
 - Exactly <num_of_queries> queries, each separated by a newline character.
 """
+
+
+PROMPTAGATOR_SET_GEN_TOPIC_USER_PROMPT = """You are an expert assistant in crafting search queries that cover specified topics and make use of given keywords for the provided article.
+
+Article:
+<document>
+
+Topics:
+<topics>
+
+Keywords:
+<keywords>
+
+Task:
+Generate exactly {num_of_queries} search queries for the above article so that:
+1. Together they cover each of the listed topics at least once.
+2. Each query uses one or more of the provided keywords in a natural way.
+
+----
+Rules:
+- NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
+- Exactly <num_of_queries> queries, each separated by a newline character.
+- Queries must be relevant to the article.
+- Queries should collectively cover all topics and use the keywords provided.
+"""
+
+
+PROMPTAGATOR_SET_GEN_NO_TOPIC_KEYWORDS_USER_PROMPT = """You are an expert assistant in crafting search queries for the provided article:
+
+Article:
+<document>
+
+Generate exactly <num_of_queries> search queries for the above article.
+
+----
+Rules:
+- NO introductory or concluding text (e.g., "Here are the questions:", "Okay, here are...", "These are the queries:").
+- Exactly <num_of_queries> queries, each separated by a newline character.
+- Queries must be relevant to the article.
+"""
+
+
+LLM_EXTRACT_KEYWORD_USER_PROMPT = """You will receive a document along with a set of candidate keywords. Your task is to select the keywords that best align with the core theme of the document. Exclude keywords that are too broad or less relevant. You may list up to <final_keyword_num> keywords, using only the keywords in the candidate keyword set.
+
+Document:
+<document>
+
+Candidate keyword set:
+<keywords>
+
+IMPORTANT: Respond with ONLY valid JSON in this exact format:
+{"keywords": ["keyword1", "keyword2", "keyword3"]}
+
+Do not include any explanations, markdown formatting, or additional text. Just the raw JSON object."""

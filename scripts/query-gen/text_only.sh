@@ -1,4 +1,4 @@
-DATASET=fiqa-bm25-5000
+DATASET=fiqa-5000
 
 python3 /home/guest/r12922050/GitHub/d2qplus/src/utils/text_only.py \
     --input "/home/guest/r12922050/GitHub/d2qplus/data/${DATASET}/corpus.jsonl" \

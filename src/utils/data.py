@@ -17,14 +17,13 @@ def get_topic_info_dict(enhanced_topic_info_pkl: str) -> dict:
         }
     return topic_dict
 
-def combine_topic_info(enhanced_topic_info_pkl: str, corpus_topics_path: str, corpus_path: str, core_phrase_path: str = None) -> List[dict]:
+def combine_topic_info(enhanced_topic_info_pkl: str, corpus_topics_path: str, corpus_path: str, core_phrase_pkl: str = None) -> List[dict]:
     """
     Enhance corpus topics with corpus text & title, topic representation (keywords) and topic NL description 及 weights 
 
     - enhanced_topic_info_pkl: Path to the topic information pickle with enhanced llm representation (e.g., topic_info_dataframe_enhanced.pkl)
     - corpus_topics_path: Path to the corpus topics JSONL file (e.g., augmented-data/CSFCube-1.1/doc_topics.jsonl)
     - corpus_path: Path to the original corpus JSONL file (e.g., augmented-data/CSFCube-1.1/corpus.jsonl)
-    - core_phrase_path: Optional path to the extracted core phrases JSONL file
 
     Returns:
         List of dictionaries with enhanced corpus topics, each containing:
@@ -35,9 +34,12 @@ def combine_topic_info(enhanced_topic_info_pkl: str, corpus_topics_path: str, co
     """
     topic_info_dict = get_topic_info_dict(enhanced_topic_info_pkl)
     corpus_topics = read_jsonl(corpus_topics_path) # doc_id, "topics": [{"topic_id": 1, "weight": 0.5}, ...]
-    if core_phrase_path:
-        core_phrases = read_jsonl(core_phrase_path)
-        docid2core_phrases = {doc['doc_id']: doc['core_phrases'] for doc in core_phrases}
+    docid2keywords = {}
+    if core_phrase_pkl:
+        docid2keywords = pd.read_pickle(core_phrase_pkl) # dict with doc_id as key and list of ('phrase', 'weight') tuple as value
+        for doc_id, keywords in docid2keywords.items():
+            docid2keywords[doc_id] = [kw[0] for kw in keywords]  # keep only phrases, not weights
+        
 
     corpus = read_jsonl(corpus_path)
     doc_id2doc = {doc['_id']: doc for doc in corpus}  # Map doc_id to document content (text, title)
@@ -64,11 +66,11 @@ def combine_topic_info(enhanced_topic_info_pkl: str, corpus_topics_path: str, co
             'doc_id': doc_id,
             'text': doc_id2doc[doc_id]['text'],
             'title': doc_id2doc[doc_id]['title'] if 'title' in doc_id2doc[doc_id] else '',
-            'topics': enhanced_topics
+            'topics': enhanced_topics,
         }
         
-        if core_phrase_path:
-            doc_entry['core_phrases'] = docid2core_phrases[doc_id]
+        if core_phrase_pkl:
+            doc_entry['keywords'] = docid2keywords[doc_id]
             
         enhanced_corpus_topics.append(doc_entry)
     

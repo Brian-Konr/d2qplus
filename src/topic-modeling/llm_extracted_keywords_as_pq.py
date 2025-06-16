@@ -5,7 +5,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate predicted queries with topic keywords')
     parser.add_argument('--llm-extracted-keywords-path', type=str, required=True,
-                        help='Path to LLM extracted keywords txt file')
+                        help='Path to LLM extracted keywords JSONL file')
     parser.add_argument('--corpus', type=str, required=True,
                         help='Path to input corpus JSONL file')
     parser.add_argument('--output', type=str, required=True,
@@ -20,12 +20,10 @@ def main():
         corpus = [json.loads(line) for line in f]
 
     with open(args.llm_extracted_keywords_path, "r") as f:
-        llm_keywords = [line.strip() for line in f.readlines()]
+        llm_keywords = [json.loads(line) for line in f.readlines()]
         # each line looks like "doc_id: keyword1, keyword2, ...", so need to parse it
-    llm_keywords_dict = {}
-    for line in llm_keywords:
-        doc_id, keywords = line.split(":", 1)  # only first colon is used to split
-        llm_keywords_dict[doc_id.strip()] = keywords
+    llm_keywords_dict = {d['doc_id']: d['keywords'] for d in llm_keywords}
+    
     for doc in corpus:
         doc_id = doc.pop('_id', None)
         doc['id'] = doc_id

@@ -226,7 +226,7 @@ if __name__ == "__main__":
             enhanced_topic_info_pkl=args.enhanced_topic_info_pkl, 
             corpus_topics_path=args.corpus_topics_path, 
             corpus_path=args.corpus_path,
-            core_phrase_path=args.core_phrase_path
+            keyword_path=args.core_phrase_path
         )
     
     print(f"✅ Loaded {len(corpus)} documents")
